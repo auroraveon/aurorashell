@@ -1,0 +1,22 @@
+[workspace]
+resolver = "3"
+members = [
+    "lib/auroraguilib",
+    "widgets/audio",
+]
+
+[workspace.dependencies]
+auroraguilib = { path = "./lib/auroraguilib/" }
+
+iced = { git = "https://github.com/pop-os/iced", features = [
+  "tokio",
+  "wgpu",
+  "winit",
+  "wayland",
+  "multi-window",
+  "lazy",
+  "advanced"
+] }
+tokio = { version = "1.43.0", features = ["full"] }
+anyhow = "1.0.97"
+
