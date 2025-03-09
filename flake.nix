@@ -18,7 +18,7 @@
 	    ];
 
 	    buildInputs = with pkgs; [
-              pkg-config
+	      pkg-config
               xorg.libX11
               xorg.libXcursor
               xorg.libXrandr
