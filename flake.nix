@@ -19,16 +19,16 @@
 
 	    buildInputs = with pkgs; [
 	      pkg-config
-              xorg.libX11
-              xorg.libXcursor
-              xorg.libXrandr
-              xorg.libXi
-              xorg.libxcb
-              libxkbcommon
-              vulkan-loader
-              wayland
-              pulseaudio
-              linuxPackages.perf
+	      xorg.libX11
+	      xorg.libXcursor
+	      xorg.libXrandr
+	      xorg.libXi
+	      xorg.libxcb
+	      libxkbcommon
+	      vulkan-loader
+	      wayland
+	      pulseaudio
+	      linuxPackages.perf
 	    ];
 
 	    shellHook = ''
