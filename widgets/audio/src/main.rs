@@ -15,8 +15,7 @@ use iced::platform_specific::shell::commands::layer_surface::{
 use iced::runtime::platform_specific::wayland::layer_surface::IcedMargin;
 use iced::widget::{button, column, pick_list, row, slider, text};
 use iced::window::Id;
-use iced::{stream, Color, Element, Subscription, Theme};
-
+use iced::{Color, Element, Font, Subscription, Task, Theme, stream};
 
 use pulse::volume::Volume;
 
@@ -126,7 +125,7 @@ enum Message {
 }
 
 impl App {
-    fn new() -> (App, Command<Message>) {
+    fn new() -> (App, Task<Message>) {
         let mut initial_surface = SctkLayerSurfaceSettings::default();
         initial_surface.layer = Layer::Top;
         initial_surface.anchor = Anchor::TOP | Anchor::RIGHT;
@@ -140,7 +139,7 @@ impl App {
         initial_surface.size = Some((Some(320), Some(230)));
 
         initial_surface.keyboard_interactivity = KeyboardInteractivity::OnDemand;
-        
+
         (Self::default(), get_layer_surface(initial_surface))
     }
 
@@ -148,8 +147,8 @@ impl App {
         String::from("Aurora Audio Widget")
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
-        let command = Command::none();
+    fn update(&mut self, message: Message) -> Task<Message> {
+        let command = Task::none();
 
         match message {
             Message::ChannelCreated(sender) => {
