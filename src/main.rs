@@ -1,6 +1,7 @@
 mod audio;
 mod sink;
 mod theme;
+mod config;
 
 use audio::{Card, Request, Sink, Source};
 

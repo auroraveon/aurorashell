@@ -1,7 +1,5 @@
 use iced::{Radius, Theme, widget::button};
 
-use config::Config;
-
 pub fn volume_button_style(theme: &Theme, _status: button::Status) -> button::Style {
     return button::Style {
         background: None,
