@@ -1,4 +1,5 @@
 mod audio;
+mod sink;
 mod theme;
 
 use audio::{Card, Request, Sink, Source};
@@ -6,6 +7,7 @@ use audio::{Card, Request, Sink, Source};
 use chrono::{DateTime, TimeDelta, Utc};
 
 use iced::advanced::layout::Limits;
+use iced::alignment::Vertical;
 use iced::daemon::Appearance;
 use iced::futures::{SinkExt, Stream};
 use iced::platform_specific::runtime::wayland::layer_surface::SctkLayerSurfaceSettings;
@@ -13,11 +15,12 @@ use iced::platform_specific::shell::commands::layer_surface::{
     Anchor, KeyboardInteractivity, Layer, get_layer_surface,
 };
 use iced::runtime::platform_specific::wayland::layer_surface::IcedMargin;
-use iced::widget::{button, column, pick_list, row, slider, text};
+use iced::widget::{button, column, container, pick_list, row, slider, text};
 use iced::window::Id;
-use iced::{Color, Element, Font, Subscription, Task, Theme, stream};
+use iced::{Background, Color, Element, Font, Subscription, Task, Theme, stream};
 
 use pulse::volume::Volume;
+use sink::{SinkMessage, SinkWidget};
 
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -39,22 +42,8 @@ struct App {
 
     update_frequency: TimeDelta,
 
-    sinks: Vec<Sink>,
-    selected_sink: Option<String>,
-    /// the pulseaudio name id for the sink
-    default_sink: Option<String>,
-    sink_volume: Arc<RwLock<f32>>,
-    sink_mute: bool,
-    sink_profiles: Vec<String>,
-    sink_selected_profile: Option<String>,
-    /// the last time either volume slider was set
-    sink_last_update_time: DateTime<Utc>,
-    /// is set to true when a thread is going
-    /// to set the volume in the future
-    ///
-    /// the time until this is set to false
-    /// is less than `self.update_frequency`
-    sink_will_set_volume: bool,
+    // widgets
+    sink: SinkWidget,
 
     sources: Vec<Source>,
     selected_source: Option<String>,
@@ -79,16 +68,8 @@ impl Default for App {
             font: Font::with_name("DepartureMono Nerd Font"),
             sender: None,
             update_frequency: TimeDelta::milliseconds(100),
-            // default sink stuff
-            sinks: vec![],
-            selected_sink: None,
-            default_sink: None,
-            sink_volume: Arc::new(RwLock::new(35.0)),
-            sink_mute: false,
-            sink_profiles: vec!["rawr".to_string()],
-            sink_selected_profile: None,
-            sink_last_update_time: Utc::now(),
-            sink_will_set_volume: false,
+            // widgets
+            sink: SinkWidget::default(),
             // default source stuff
             sources: vec![],
             selected_source: None,
@@ -103,22 +84,17 @@ impl Default for App {
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+pub enum Message {
     /// event for when the sender is created
     /// by the subscription worker
     ChannelCreated(flume::Sender<Request>),
 
-    SelectedSinkChanged(String),
-    SinkVolume(f32),
-    SinkMute,
-    SinkProfile(String),
+    Sink(SinkMessage),
 
     SelectedSourceChanged(String),
     SourceVolume(f32),
 
     // --- pulseaudio events ---
-    SinksChanged(Vec<Sink>),
-    DefaultSinkChanged(Option<String>),
     SourcesChanged(Vec<Source>),
     DefaultSourceChanged(Option<String>),
     CardsChanged(Vec<Card>),
@@ -130,13 +106,13 @@ impl App {
         initial_surface.layer = Layer::Top;
         initial_surface.anchor = Anchor::TOP | Anchor::RIGHT;
         initial_surface.margin = IcedMargin {
-            top: 8,
+            top: 12,
             right: 20,
             bottom: 0,
             left: 0,
         };
         initial_surface.size_limits = Limits::NONE;
-        initial_surface.size = Some((Some(320), Some(230)));
+        initial_surface.size = Some((Some(320), Some(240)));
 
         initial_surface.keyboard_interactivity = KeyboardInteractivity::OnDemand;
 
@@ -148,167 +124,17 @@ impl App {
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
-        let command = Task::none();
+        let mut command = Task::none();
 
         match message {
             Message::ChannelCreated(sender) => {
                 self.sender = Some(sender);
             }
-            Message::SelectedSinkChanged(sink) => {
-                self.selected_sink = Some(sink.clone());
-
+            Message::Sink(message) => {
                 if let Some(sender) = self.sender.clone() {
-                    for s in &self.sinks {
-                        if sink == s.description {
-                            if let Err(err) = sender.send(Request::SetDefaultSink(s.name.clone())) {
-                                eprintln!("error while sending Request::SetDefaultSink: {}", err);
-                            }
-                        }
-                    }
-                }
-
-                let sink: Sink = {
-                    let mut sink: Option<Sink> = None;
-                    if let Some(_sink) = &self.selected_sink {
-                        for s in &self.sinks {
-                            if _sink == &s.description {
-                                sink = Some(s.clone());
-                                break;
-                            }
-                        }
-                    }
-                    match sink {
-                        Some(sink) => sink,
-                        None => return command,
-                    }
-                };
-
-                if let Some(index) = sink.card_index {
-                    for card in &self.cards {
-                        if index == card.index {
-                            self.sink_profiles = card
-                                .profiles
-                                .iter()
-                                .map(|profile| profile.description.clone())
-                                .collect::<Vec<String>>();
-
-                            self.sink_selected_profile = match &card.selected_profile {
-                                Some(profile) => Some(profile.description.clone()),
-                                None => None,
-                            }
-                        }
-                    }
-                }
-            }
-            Message::SinkVolume(volume) => {
-                *self.sink_volume.write().unwrap() = volume;
-
-                let t = Utc::now();
-                let delta = t - self.sink_last_update_time;
-                let is_too_soon = delta < self.update_frequency;
-                if is_too_soon && self.sink_will_set_volume {
-                    return command;
-                }
-
-                let sender = match &self.sender {
-                    Some(v) => v.clone(),
-                    None => {
-                        eprintln!("no sender available");
-                        return command;
-                    }
-                };
-
-                let set_volume = move |sink: Option<Sink>, sink_volume: f32| {
-                    if let Some(sink) = sink {
-                        let vol = ((sink_volume / 100.0 * PULSE_MAX_VOLUME as f32).round() as u32)
-                            .clamp(0, PULSE_MAX_VOLUME);
-                        let mut volume = sink.volume.clone();
-                        volume.set(volume.get().len() as u8, Volume(vol));
-
-                        if let Err(err) =
-                            sender.send(Request::SetSinkVolume(sink.name.clone(), volume))
-                        {
-                            eprintln!("error while sending Request::SetSinkVolume: {}", err);
-                        }
-                    }
-                };
-
-                let mut sink: Option<Sink> = None;
-                if let Some(_sink) = &self.default_sink {
-                    for s in &self.sinks {
-                        if _sink == &s.name {
-                            sink = Some(s.clone());
-                        }
-                    }
-                }
-
-                if is_too_soon {
-                    if !self.sink_will_set_volume {
-                        let wait_time = (self.update_frequency - delta).to_std().expect("HEY! *flusters* i dont know why it did this! its supposed to be in range *sad fox noises*");
-
-                        let volume = Arc::clone(&self.sink_volume);
-                        thread::spawn(move || {
-                            thread::sleep(wait_time);
-                            set_volume(sink, *volume.read().unwrap());
-                        });
-                        self.sink_will_set_volume = true;
-                    }
-
-                    return command;
-                }
-                self.sink_last_update_time = t;
-                self.sink_will_set_volume = false;
-
-                set_volume(sink, *self.sink_volume.read().unwrap());
-            }
-            Message::SinkMute => {
-                self.sink_mute = !self.sink_mute;
-            }
-            Message::SinkProfile(profile) => {
-                self.sink_selected_profile = Some(profile.clone());
-
-                let sender = match &self.sender {
-                    Some(s) => s.clone(),
-                    None => return command,
-                };
-
-                let sink: Sink = {
-                    let mut sink: Option<Sink> = None;
-                    if let Some(_sink) = &self.default_sink {
-                        for s in &self.sinks {
-                            if _sink == &s.name {
-                                sink = Some(s.clone());
-                                break;
-                            }
-                        }
-                    }
-                    match sink {
-                        Some(sink) => sink,
-                        None => return command,
-                    }
-                };
-
-                for card in &self.cards {
-                    let index = match sink.card_index {
-                        Some(i) => i,
-                        None => continue,
-                    };
-
-                    if index == card.index {
-                        for p in &card.profiles {
-                            if profile == p.description {
-                                if let Err(err) = sender.send(Request::SetCardProfile(
-                                    card.name.clone(),
-                                    p.name.clone(),
-                                )) {
-                                    eprintln!(
-                                        "error while sending Request::SetCardProfile: {}",
-                                        err
-                                    );
-                                }
-                            }
-                        }
-                    }
+                    command = self
+                        .sink
+                        .update(message, sender, self.update_frequency, &self.cards);
                 }
             }
             Message::SelectedSourceChanged(source) => {
@@ -387,61 +213,6 @@ impl App {
 
                 set_volume(source, *self.source_volume.read().unwrap());
             }
-            Message::SinksChanged(sinks) => {
-                self.sinks = sinks;
-
-                if let Some(sink) = &self.default_sink {
-                    for s in &self.sinks {
-                        if sink == &s.name {
-                            self.selected_sink = Some(s.description.clone());
-
-                            let Volume(volume) = s.volume.avg();
-                            *self.sink_volume.write().unwrap() =
-                                f32::round(volume as f32 / PULSE_MAX_VOLUME as f32 * 100.0);
-
-                            break;
-                        }
-                    }
-                }
-            }
-            Message::DefaultSinkChanged(sink) => {
-                self.default_sink = sink.clone();
-
-                let sink = match sink {
-                    Some(s) => s,
-                    None => return command,
-                };
-
-                let sink = match self.sinks.iter().find(|s| s.name == sink) {
-                    Some(sink) => {
-                        self.selected_sink = Some(sink.description.clone());
-
-                        let Volume(volume) = sink.volume.avg();
-                        *self.sink_volume.write().unwrap() =
-                            f32::round(volume as f32 / PULSE_MAX_VOLUME as f32 * 100.0);
-
-                        sink
-                    }
-                    None => return command,
-                };
-
-                let index = match sink.card_index {
-                    Some(i) => i,
-                    None => return command,
-                };
-
-                let card = match self.cards.iter().find(|c| c.index == index) {
-                    Some(card) => card,
-                    None => return command,
-                };
-
-                match &card.selected_profile {
-                    Some(profile) => {
-                        self.sink_selected_profile = Some(profile.description.clone());
-                    }
-                    None => return command,
-                };
-            }
             Message::SourcesChanged(sources) => {
                 self.sources = sources;
 
@@ -483,8 +254,8 @@ impl App {
 
                 let sink: Sink = {
                     let mut sink: Option<Sink> = None;
-                    if let Some(_sink) = &self.default_sink {
-                        for s in &self.sinks {
+                    if let Some(_sink) = &self.sink.default_sink {
+                        for s in &self.sink.sinks {
                             if _sink == &s.name {
                                 sink = Some(s.clone());
                                 break;
@@ -498,15 +269,15 @@ impl App {
                 };
 
                 if let Some(index) = sink.card_index {
-                    for card in cards {
+                    for card in &self.cards {
                         if index == card.index {
-                            self.sink_profiles = card
+                            self.sink.sink_profiles = card
                                 .profiles
                                 .iter()
                                 .map(|profile| profile.description.clone())
                                 .collect::<Vec<String>>();
 
-                            self.sink_selected_profile = match &card.selected_profile {
+                            self.sink.sink_selected_profile = match &card.selected_profile {
                                 Some(profile) => Some(profile.description.clone()),
                                 None => None,
                             }
@@ -521,6 +292,7 @@ impl App {
 
     fn view(&self, _: Id) -> Element<Message> {
         let sinks = self
+            .sink
             .sinks
             .iter()
             .map(|sink| sink.description.clone())
@@ -534,35 +306,43 @@ impl App {
 
         let sink_ui = column![
             text("Output").font(self.font).size(11),
-            pick_list(sinks.clone(), self.selected_sink.clone(), |sink| {
-                Message::SelectedSinkChanged(sink)
+            pick_list(sinks.clone(), self.sink.selected_sink.clone(), |sink| {
+                Message::Sink(SinkMessage::SelectedSinkChanged(sink))
             })
             .font(self.font)
             .text_size(11)
             .text_wrap(text::Wrapping::WordOrGlyph),
             pick_list(
-                self.sink_profiles.clone(),
-                self.sink_selected_profile.clone(),
-                |profile| { Message::SinkProfile(profile) }
+                self.sink.sink_profiles.clone(),
+                self.sink.sink_selected_profile.clone(),
+                |profile| { Message::Sink(SinkMessage::SinkProfile(profile)) }
             )
             .font(self.font)
             .text_size(11),
             row![
-                button(match self.sink_mute {
-                    true => "",
-                    false => "",
-                })
-                .on_press(Message::SinkMute),
-                text(format!("{}%", *self.sink_volume.read().unwrap()))
+                button(
+                    text(match self.sink.sink_mute {
+                        true => "",
+                        false => "",
+                    })
+                    .font(self.font)
+                    .size(11)
+                )
+                .on_press(Message::Sink(SinkMessage::SinkMute))
+                .style(theme::volume_button_style),
+                text(format!("{}%", *self.sink.sink_volume.read().unwrap()))
                     .font(self.font)
                     .size(11),
-                slider(0.0..=100.0, *self.sink_volume.read().unwrap(), |volume| {
-                    Message::SinkVolume(volume)
-                })
+                slider(
+                    0.0..=100.0,
+                    *self.sink.sink_volume.read().unwrap(),
+                    |volume| { Message::Sink(SinkMessage::SinkVolume(volume)) }
+                )
                 .step(5.0)
                 .shift_step(1.0),
             ]
-            .spacing(8),
+            .spacing(8)
+            .align_y(Vertical::Center),
         ]
         .spacing(8);
 
@@ -587,7 +367,17 @@ impl App {
         ]
         .spacing(8);
 
-        column![sink_ui, source_ui].padding(8).spacing(16).into()
+        container(column![sink_ui, source_ui].padding(16).spacing(16))
+            .style(|theme: &Theme| container::Style {
+                background: Some(Background::Color(theme.palette().background)),
+                border: iced::Border {
+                    color: theme.palette().text,
+                    width: 1.0,
+                    radius: iced::Radius::new(12),
+                },
+                ..container::Style::default()
+            })
+            .into()
     }
 
     fn subscription(&self) -> Subscription<Message> {
@@ -640,12 +430,12 @@ impl App {
 
                         match msg {
                             audio::Message::SinksChanged(sinks) => {
-                                if let Err(err) = chan.send(Message::SinksChanged(sinks)).await {
+                                if let Err(err) = chan.send(Message::Sink(SinkMessage::SinksChanged(sinks))).await {
                                     eprintln!("error while sending Message:SinksChanged: {}", err);
                                 }
                             },
                             audio::Message::DefaultSinkChanged(sink) => {
-                                if let Err(err) = chan.send(Message::DefaultSinkChanged(sink)).await {
+                                if let Err(err) = chan.send(Message::Sink(SinkMessage::DefaultSinkChanged(sink))).await {
                                     eprintln!("error while sending Message:DefaultSinkChanged: {}", err);
                                 }
                             },
