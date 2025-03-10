@@ -15,10 +15,11 @@ iced = { git = "https://github.com/pop-os/iced", features = [
   "lazy",
   "advanced"
 ] }
-iced_futures = "0.13.2"
 tokio = { version = "1.43.0", features = ["full"] }
 pulse = { package = "libpulse-binding", version = "2.28.2" }
-config = "0.15.9"
+config = { version = "0.15.9", default-features = false, features = ["toml"] }
+
+iced_futures = "0.13.2"
 
 anyhow = "1.0.97"
 chrono = "0.4.40"
