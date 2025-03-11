@@ -21,6 +21,7 @@ use iced::{Background, Color, Element, Font, Subscription, Task, Theme, stream};
 
 use pulse::volume::Volume;
 use sink::{SinkMessage, SinkWidget};
+use theme::Base16Theme;
 
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -37,9 +38,9 @@ pub fn main() -> iced::Result {
 }
 
 struct App {
+    base_16_theme: Base16Theme,
     font: Font,
     sender: Option<flume::Sender<Request>>,
-
     update_frequency: TimeDelta,
 
     // widgets
@@ -64,7 +65,17 @@ struct App {
 
 impl Default for App {
     fn default() -> Self {
+        let theme = match Base16Theme::from_config() {
+            Ok(theme) => theme,
+            Err(e) => {
+                // todo: should prob not just panic but its not like i wanna
+                // continue to load anyway soooooo >:3
+                panic!("error occured while loading theme: {e}");
+            }
+        };
+
         Self {
+            base_16_theme: theme,
             font: Font::with_name("DepartureMono Nerd Font"),
             sender: None,
             update_frequency: TimeDelta::milliseconds(100),
@@ -329,7 +340,7 @@ impl App {
                     .size(11)
                 )
                 .on_press(Message::Sink(SinkMessage::UISinkMute))
-                .style(theme::volume_button_style),
+                .style(theme::volume_button_style(&self.base_16_theme)),
                 text(format!("{}%", *self.sink.ui_sink_volume.read().unwrap()))
                     .font(self.font)
                     .size(11),
@@ -368,10 +379,10 @@ impl App {
         .spacing(8);
 
         container(column![sink_ui, source_ui].padding(16).spacing(16))
-            .style(|theme: &Theme| container::Style {
-                background: Some(Background::Color(theme.palette().background)),
+            .style(|_: &Theme| container::Style {
+                background: Some(Background::Color(self.base_16_theme.background)),
                 border: iced::Border {
-                    color: theme.palette().text,
+                    color: self.base_16_theme.color01,
                     width: 1.0,
                     radius: iced::Radius::new(12),
                 },
