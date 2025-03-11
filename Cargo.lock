@@ -424,15 +424,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "auroraguilib"
-version = "0.1.0"
-
-[[package]]
 name = "aurorashell"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "auroraguilib",
  "chrono",
  "config",
  "flume",

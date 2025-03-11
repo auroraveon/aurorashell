@@ -1,7 +1,6 @@
 mod audio;
 mod sink;
 mod theme;
-mod config;
 
 use audio::{Card, Request, Sink, Source};
 
@@ -478,6 +477,11 @@ impl App {
                                     eprintln!("error while sending Request::SetSinkVolume: {}", err)
                                 }
                             },
+                            Request::SetSinkMute(sink, mute) => {
+                                if let Err(err) = audio_tx.send(audio::Request::SetSinkMute(sink, mute)) {
+                                    eprintln!("error while sending Request::SetSinkMute: {}", err)
+                                }
+                            }
                             Request::SetDefaultSource(source) => {
                                 if let Err(err) = audio_tx.send(audio::Request::SetDefaultSource(source)) {
                                     eprintln!("error while sending Request::SetDefaultSource: {}", err)

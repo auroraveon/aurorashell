@@ -195,6 +195,17 @@ impl SinkWidget {
             }
             SinkMessage::SinkMute => {
                 self.sink_mute = !self.sink_mute;
+
+                let sink: Sink = match self.get_default_sink() {
+                    Some(sink) => sink,
+                    None => return command,
+                };
+
+                if let Err(err) =
+                    sender.send(Request::SetSinkMute(sink.name.clone(), self.sink_mute))
+                {
+                    eprintln!("error while sending Request::SetSinkMute: {}", err);
+                }
             }
             SinkMessage::SinksChanged(sinks) => {
                 self.sinks = sinks;
@@ -207,6 +218,8 @@ impl SinkWidget {
                             let Volume(volume) = s.volume.avg();
                             *self.sink_volume.write().unwrap() =
                                 f32::round(volume as f32 / PULSE_MAX_VOLUME as f32 * 100.0);
+
+                            self.sink_mute = s.mute;
 
                             break;
                         }

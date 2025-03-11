@@ -26,6 +26,7 @@ pub enum Message {
 pub enum Request {
     SetDefaultSink(String),
     SetSinkVolume(String, ChannelVolumes),
+    SetSinkMute(String, bool),
 
     SetDefaultSource(String),
     SetSourceVolume(String, ChannelVolumes),
@@ -133,7 +134,7 @@ pub fn run() -> anyhow::Result<(
             let event = operation.unwrap();
 
             let timestamp = chrono::Utc::now().format("%H:%M:%S.%f");
-            println!("[{timestamp}] {event_type:?}, {event:?}");
+            //println!("[{timestamp}] {event_type:?}, {event:?}");
 
             match event {
                 subscribe::Operation::New => {
@@ -259,6 +260,11 @@ pub fn run() -> anyhow::Result<(
                         .introspect()
                         .set_sink_volume_by_name(sink.as_str(), &volume, None);
                 }
+                Request::SetSinkMute(sink, mute) => {
+                    context
+                        .introspect()
+                        .set_sink_mute_by_name(sink.as_str(), mute, None);
+                }
                 Request::SetDefaultSource(source) => {
                     context.set_default_source(source.as_str(), |_| {});
                 }
@@ -304,6 +310,7 @@ pub struct Sink {
     pub name: String,
     pub description: String,
     pub volume: ChannelVolumes,
+    pub mute: bool,
     pub card_index: Option<u32>,
 }
 
@@ -324,6 +331,7 @@ fn get_sinks(introspector: &Introspector, tx: flume::Sender<Message>) {
                     .unwrap_or(Cow::Borrowed("Unknown"))
                     .to_string(),
                 volume: sink.volume,
+                mute: sink.mute,
                 card_index: sink.card,
             };
 

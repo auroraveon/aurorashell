@@ -4,8 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-auroraguilib = { path = "./lib/auroraguilib/" }
-
 iced = { git = "https://github.com/pop-os/iced", features = [
   "tokio",
   "wgpu",
