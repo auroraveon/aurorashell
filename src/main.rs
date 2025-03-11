@@ -277,7 +277,7 @@ impl App {
                                 .map(|profile| profile.description.clone())
                                 .collect::<Vec<String>>();
 
-                            self.sink.sink_selected_profile = match &card.selected_profile {
+                            self.sink.ui_sink_selected_profile = match &card.selected_profile {
                                 Some(profile) => Some(profile.description.clone()),
                                 None => None,
                             }
@@ -306,37 +306,37 @@ impl App {
 
         let sink_ui = column![
             text("Output").font(self.font).size(11),
-            pick_list(sinks.clone(), self.sink.selected_sink.clone(), |sink| {
-                Message::Sink(SinkMessage::SelectedSinkChanged(sink))
+            pick_list(sinks.clone(), self.sink.ui_selected_sink.clone(), |sink| {
+                Message::Sink(SinkMessage::UISelectedSinkChanged(sink))
             })
             .font(self.font)
             .text_size(11)
             .text_wrap(text::Wrapping::WordOrGlyph),
             pick_list(
                 self.sink.sink_profiles.clone(),
-                self.sink.sink_selected_profile.clone(),
-                |profile| { Message::Sink(SinkMessage::SinkProfile(profile)) }
+                self.sink.ui_sink_selected_profile.clone(),
+                |profile| { Message::Sink(SinkMessage::UISinkProfile(profile)) }
             )
             .font(self.font)
             .text_size(11),
             row![
                 button(
-                    text(match self.sink.sink_mute {
+                    text(match self.sink.ui_sink_mute {
                         true => "",
                         false => "",
                     })
                     .font(self.font)
                     .size(11)
                 )
-                .on_press(Message::Sink(SinkMessage::SinkMute))
+                .on_press(Message::Sink(SinkMessage::UISinkMute))
                 .style(theme::volume_button_style),
-                text(format!("{}%", *self.sink.sink_volume.read().unwrap()))
+                text(format!("{}%", *self.sink.ui_sink_volume.read().unwrap()))
                     .font(self.font)
                     .size(11),
                 slider(
                     0.0..=100.0,
-                    *self.sink.sink_volume.read().unwrap(),
-                    |volume| { Message::Sink(SinkMessage::SinkVolume(volume)) }
+                    *self.sink.ui_sink_volume.read().unwrap(),
+                    |volume| { Message::Sink(SinkMessage::UISinkVolume(volume)) }
                 )
                 .step(5.0)
                 .shift_step(1.0),
@@ -430,12 +430,12 @@ impl App {
 
                         match msg {
                             audio::Message::SinksChanged(sinks) => {
-                                if let Err(err) = chan.send(Message::Sink(SinkMessage::SinksChanged(sinks))).await {
+                                if let Err(err) = chan.send(Message::Sink(SinkMessage::EventSinksChanged(sinks))).await {
                                     eprintln!("error while sending Message:SinksChanged: {}", err);
                                 }
                             },
                             audio::Message::DefaultSinkChanged(sink) => {
-                                if let Err(err) = chan.send(Message::Sink(SinkMessage::DefaultSinkChanged(sink))).await {
+                                if let Err(err) = chan.send(Message::Sink(SinkMessage::EventDefaultSinkChanged(sink))).await {
                                     eprintln!("error while sending Message:DefaultSinkChanged: {}", err);
                                 }
                             },

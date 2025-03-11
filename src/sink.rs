@@ -15,24 +15,33 @@ use pulse::volume::Volume;
 
 #[derive(Debug, Clone)]
 pub enum SinkMessage {
-    SelectedSinkChanged(String),
-    SinkProfile(String),
-    SinkVolume(f32),
-    SinkMute,
+    /// when the user changes the selected sink
+    UISelectedSinkChanged(String),
+    /// when the user changes the profile of the selected sink
+    ///
+    /// note: currently causes the ui to revert to the "next default" sink
+    UISinkProfile(String),
+    /// when the user changes the volume
+    UISinkVolume(f32),
+    /// when the user toggles mute
+    UISinkMute,
 
-    SinksChanged(Vec<Sink>),
-    DefaultSinkChanged(Option<String>),
+    /// event emitted when any property of any sink changes
+    EventSinksChanged(Vec<Sink>),
+    /// event emitted when just the default sink changes
+    EventDefaultSinkChanged(Option<String>),
 }
 
 pub struct SinkWidget {
+    pub ui_selected_sink: Option<String>,
+    pub ui_sink_selected_profile: Option<String>,
+    pub ui_sink_volume: Arc<RwLock<f32>>,
+    pub ui_sink_mute: bool,
+
     pub sinks: Vec<Sink>,
-    pub selected_sink: Option<String>,
     /// the pulseaudio name id for the sink
     pub default_sink: Option<String>,
-    pub sink_volume: Arc<RwLock<f32>>,
-    pub sink_mute: bool,
     pub sink_profiles: Vec<String>,
-    pub sink_selected_profile: Option<String>,
     /// the last time either volume slider was set
     pub sink_last_update_time: DateTime<Utc>,
     /// is set to true when a thread is going
@@ -47,12 +56,12 @@ impl Default for SinkWidget {
     fn default() -> Self {
         Self {
             sinks: vec![],
-            selected_sink: None,
+            ui_selected_sink: None,
             default_sink: None,
-            sink_volume: Arc::new(RwLock::new(35.0)),
-            sink_mute: false,
+            ui_sink_volume: Arc::new(RwLock::new(35.0)),
+            ui_sink_mute: false,
             sink_profiles: vec!["rawr".to_string()],
-            sink_selected_profile: None,
+            ui_sink_selected_profile: None,
             sink_last_update_time: Utc::now(),
             sink_will_set_volume: false,
         }
@@ -61,7 +70,7 @@ impl Default for SinkWidget {
 
 impl SinkWidget {
     fn get_default_sink(&self) -> Option<Sink> {
-        if let Some(sink) = &self.selected_sink {
+        if let Some(sink) = &self.ui_selected_sink {
             for s in &self.sinks {
                 if sink == &s.description {
                     return Some(s.clone());
@@ -81,8 +90,8 @@ impl SinkWidget {
         let command = Task::none();
 
         match message {
-            SinkMessage::SelectedSinkChanged(sink) => {
-                self.selected_sink = Some(sink.clone());
+            SinkMessage::UISelectedSinkChanged(sink) => {
+                self.ui_selected_sink = Some(sink.clone());
 
                 for s in &self.sinks {
                     if sink == s.description {
@@ -106,7 +115,7 @@ impl SinkWidget {
                                 .map(|profile| profile.description.clone())
                                 .collect::<Vec<String>>();
 
-                            self.sink_selected_profile = match &card.selected_profile {
+                            self.ui_sink_selected_profile = match &card.selected_profile {
                                 Some(profile) => Some(profile.description.clone()),
                                 None => None,
                             }
@@ -114,8 +123,8 @@ impl SinkWidget {
                     }
                 }
             }
-            SinkMessage::SinkProfile(profile) => {
-                self.sink_selected_profile = Some(profile.clone());
+            SinkMessage::UISinkProfile(profile) => {
+                self.ui_sink_selected_profile = Some(profile.clone());
 
                 let sink: Sink = match self.get_default_sink() {
                     Some(sink) => sink,
@@ -145,8 +154,8 @@ impl SinkWidget {
                     }
                 }
             }
-            SinkMessage::SinkVolume(volume) => {
-                *self.sink_volume.write().unwrap() = volume;
+            SinkMessage::UISinkVolume(volume) => {
+                *self.ui_sink_volume.write().unwrap() = volume;
 
                 let t = Utc::now();
                 let delta = t - self.sink_last_update_time;
@@ -178,7 +187,7 @@ impl SinkWidget {
                         // get why time would move backwards
                         let wait_time = (update_freq - delta).to_std().expect("HEY! *flusters* i dont know why it did this! its supposed to be in range *sad fox noises*");
 
-                        let volume = Arc::clone(&self.sink_volume);
+                        let volume = Arc::clone(&self.ui_sink_volume);
                         thread::spawn(move || {
                             thread::sleep(wait_time);
                             set_volume(sink, *volume.read().unwrap());
@@ -191,10 +200,10 @@ impl SinkWidget {
                 self.sink_last_update_time = t;
                 self.sink_will_set_volume = false;
 
-                set_volume(sink, *self.sink_volume.read().unwrap());
+                set_volume(sink, *self.ui_sink_volume.read().unwrap());
             }
-            SinkMessage::SinkMute => {
-                self.sink_mute = !self.sink_mute;
+            SinkMessage::UISinkMute => {
+                self.ui_sink_mute = !self.ui_sink_mute;
 
                 let sink: Sink = match self.get_default_sink() {
                     Some(sink) => sink,
@@ -202,31 +211,31 @@ impl SinkWidget {
                 };
 
                 if let Err(err) =
-                    sender.send(Request::SetSinkMute(sink.name.clone(), self.sink_mute))
+                    sender.send(Request::SetSinkMute(sink.name.clone(), self.ui_sink_mute))
                 {
                     eprintln!("error while sending Request::SetSinkMute: {}", err);
                 }
             }
-            SinkMessage::SinksChanged(sinks) => {
+            SinkMessage::EventSinksChanged(sinks) => {
                 self.sinks = sinks;
 
                 if let Some(sink) = &self.default_sink {
                     for s in &self.sinks {
                         if sink == &s.name {
-                            self.selected_sink = Some(s.description.clone());
+                            self.ui_selected_sink = Some(s.description.clone());
 
                             let Volume(volume) = s.volume.avg();
-                            *self.sink_volume.write().unwrap() =
+                            *self.ui_sink_volume.write().unwrap() =
                                 f32::round(volume as f32 / PULSE_MAX_VOLUME as f32 * 100.0);
 
-                            self.sink_mute = s.mute;
+                            self.ui_sink_mute = s.mute;
 
                             break;
                         }
                     }
                 }
             }
-            SinkMessage::DefaultSinkChanged(sink) => {
+            SinkMessage::EventDefaultSinkChanged(sink) => {
                 self.default_sink = sink.clone();
 
                 let sink = match sink {
@@ -236,10 +245,10 @@ impl SinkWidget {
 
                 let sink = match self.sinks.iter().find(|s| s.name == sink) {
                     Some(sink) => {
-                        self.selected_sink = Some(sink.description.clone());
+                        self.ui_selected_sink = Some(sink.description.clone());
 
                         let Volume(volume) = sink.volume.avg();
-                        *self.sink_volume.write().unwrap() =
+                        *self.ui_sink_volume.write().unwrap() =
                             f32::round(volume as f32 / PULSE_MAX_VOLUME as f32 * 100.0);
 
                         sink
@@ -259,7 +268,7 @@ impl SinkWidget {
 
                 match &card.selected_profile {
                     Some(profile) => {
-                        self.sink_selected_profile = Some(profile.description.clone());
+                        self.ui_sink_selected_profile = Some(profile.description.clone());
                     }
                     None => return command,
                 };
