@@ -1,7 +1,12 @@
 use std::{collections::HashMap, env, path::PathBuf};
 
 use config::Config;
-use iced::{Color, Radius, Theme, color, widget::button};
+use iced::{
+    Background, Border, Color, Radius, Theme, border, color,
+    core::widget::text,
+    overlay::menu,
+    widget::{button, pick_list, slider},
+};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Default)]
@@ -114,6 +119,54 @@ impl Base16Theme {
             color15: get_key("color15")?,
         });
     }
+}
+
+pub fn text_style(theme: &Base16Theme) -> text::StyleFn<Theme> {
+    return Box::new(|_: &Theme| text::Style {
+        color: Some(theme.foreground),
+    });
+}
+
+pub fn pick_list_style(theme: &Base16Theme) -> pick_list::StyleFn<Theme> {
+    return Box::new(|_: &Theme, _status: pick_list::Status| pick_list::Style {
+        background: Background::Color(theme.color01),
+        text_color: theme.foreground,
+        placeholder_color: theme.color12,
+        handle_color: theme.color14,
+        border: border::width(1).rounded(4).color(theme.color04),
+    });
+}
+
+pub fn pick_list_menu_style(theme: &Base16Theme) -> menu::StyleFn<Theme> {
+    return Box::new(|_: &Theme| menu::Style {
+        background: Background::Color(theme.color00),
+        text_color: theme.foreground,
+        selected_background: Background::Color(theme.color12),
+        selected_text_color: theme.color14,
+        border: border::width(1).rounded(4).color(theme.color04),
+    });
+}
+
+pub fn slider_style(theme: &Base16Theme) -> slider::StyleFn<Theme> {
+    return Box::new(|_: &Theme, _status: slider::Status| slider::Style {
+        rail: slider::Rail {
+            backgrounds: (
+                Background::Color(theme.color13),
+                Background::Color(theme.color00),
+            ),
+            width: 8.0,
+            border: border::width(0).color(theme.background).rounded(128),
+        },
+        breakpoint: slider::Breakpoint {
+            color: theme.color10,
+        },
+        handle: slider::Handle {
+            shape: slider::HandleShape::Circle { radius: 0.0 },
+            background: Background::Color(theme.color13),
+            border_width: 0.0,
+            border_color: Color::TRANSPARENT,
+        },
+    });
 }
 
 pub fn volume_button_style(theme: &Base16Theme) -> button::StyleFn<Theme> {

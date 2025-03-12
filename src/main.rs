@@ -17,7 +17,7 @@ use iced::platform_specific::shell::commands::layer_surface::{
 use iced::runtime::platform_specific::wayland::layer_surface::IcedMargin;
 use iced::widget::{button, column, container, pick_list, row, slider, text};
 use iced::window::Id;
-use iced::{Background, Color, Element, Font, Subscription, Task, Theme, stream};
+use iced::{Background, Color, Element, Font, Subscription, Task, Theme, border, stream};
 
 use pulse::volume::Volume;
 use sink::{SinkMessage, SinkWidget};
@@ -114,6 +114,8 @@ pub enum Message {
 impl App {
     fn new() -> (App, Task<Message>) {
         let mut initial_surface = SctkLayerSurfaceSettings::default();
+
+        initial_surface.namespace = "aurorashell".to_string();
         initial_surface.layer = Layer::Top;
         initial_surface.anchor = Anchor::TOP | Anchor::RIGHT;
         initial_surface.margin = IcedMargin {
@@ -316,10 +318,15 @@ impl App {
             .collect::<Vec<String>>();
 
         let sink_ui = column![
-            text("Output").font(self.font).size(11),
+            text("Output")
+                .style(theme::text_style(&self.base_16_theme))
+                .font(self.font)
+                .size(11),
             pick_list(sinks.clone(), self.sink.ui_selected_sink.clone(), |sink| {
                 Message::Sink(SinkMessage::UISelectedSinkChanged(sink))
             })
+            .style(theme::pick_list_style(&self.base_16_theme))
+            .menu_style(theme::pick_list_menu_style(&self.base_16_theme))
             .font(self.font)
             .text_size(11)
             .text_wrap(text::Wrapping::WordOrGlyph),
@@ -328,6 +335,8 @@ impl App {
                 self.sink.ui_sink_selected_profile.clone(),
                 |profile| { Message::Sink(SinkMessage::UISinkProfile(profile)) }
             )
+            .style(theme::pick_list_style(&self.base_16_theme))
+            .menu_style(theme::pick_list_menu_style(&self.base_16_theme))
             .font(self.font)
             .text_size(11),
             row![
@@ -342,15 +351,29 @@ impl App {
                 .on_press(Message::Sink(SinkMessage::UISinkMute))
                 .style(theme::volume_button_style(&self.base_16_theme)),
                 text(format!("{}%", *self.sink.ui_sink_volume.read().unwrap()))
+                    .style(theme::text_style(&self.base_16_theme))
                     .font(self.font)
                     .size(11),
-                slider(
-                    0.0..=100.0,
-                    *self.sink.ui_sink_volume.read().unwrap(),
-                    |volume| { Message::Sink(SinkMessage::UISinkVolume(volume)) }
+                container(
+                    slider(
+                        0.0..=100.0,
+                        *self.sink.ui_sink_volume.read().unwrap(),
+                        |volume| { Message::Sink(SinkMessage::UISinkVolume(volume)) }
+                    )
+                    .style(theme::slider_style(&self.base_16_theme))
+                    .step(5.0)
+                    .shift_step(1.0)
                 )
-                .step(5.0)
-                .shift_step(1.0),
+                .height(8)
+                .style(|_: &Theme| container::Style {
+                    background: Some(Background::Color(self.base_16_theme.color00)),
+                    border: iced::Border {
+                        color: Color::TRANSPARENT,
+                        width: 0.0,
+                        radius: iced::Radius::new(128),
+                    },
+                    ..container::Style::default()
+                }),
             ]
             .spacing(8)
             .align_y(Vertical::Center),
@@ -358,19 +381,26 @@ impl App {
         .spacing(8);
 
         let source_ui = column![
-            text("Input").font(self.font).size(11),
+            text("Input")
+                .style(theme::text_style(&self.base_16_theme))
+                .font(self.font)
+                .size(11),
             pick_list(sources.clone(), self.selected_source.clone(), |source| {
                 Message::SelectedSourceChanged(source)
             })
+            .style(theme::pick_list_style(&self.base_16_theme))
+            .menu_style(theme::pick_list_menu_style(&self.base_16_theme))
             .font(self.font)
             .text_size(11),
             row![
                 text(format!("{}%", *self.source_volume.read().unwrap()))
+                    .style(theme::text_style(&self.base_16_theme))
                     .font(self.font)
                     .size(11),
                 slider(0.0..=100.0, *self.source_volume.read().unwrap(), |volume| {
                     Message::SourceVolume(volume)
                 })
+                .style(theme::slider_style(&self.base_16_theme))
                 .step(5.0)
                 .shift_step(1.0),
             ]
@@ -381,11 +411,9 @@ impl App {
         container(column![sink_ui, source_ui].padding(16).spacing(16))
             .style(|_: &Theme| container::Style {
                 background: Some(Background::Color(self.base_16_theme.background)),
-                border: iced::Border {
-                    color: self.base_16_theme.color01,
-                    width: 1.0,
-                    radius: iced::Radius::new(12),
-                },
+                border: border::width(2.0)
+                    .rounded(16)
+                    .color(self.base_16_theme.color01),
                 ..container::Style::default()
             })
             .into()
@@ -396,7 +424,7 @@ impl App {
     }
 
     fn theme(&self, _id: Id) -> iced::Theme {
-        Theme::Ferra
+        Theme::KanagawaLotus
     }
 
     fn style(&self, theme: &Theme) -> Appearance {
