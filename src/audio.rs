@@ -11,6 +11,7 @@ use pulse::mainloop::standard::{IterateResult, Mainloop};
 use pulse::proplist::{Proplist, properties};
 use pulse::volume::ChannelVolumes;
 
+#[derive(Debug, Clone)]
 pub enum Message {
     SinksChanged(Vec<Sink>),
     DefaultSinkChanged(Option<String>),
@@ -314,6 +315,16 @@ pub struct Sink {
     pub card_index: Option<u32>,
 }
 
+impl PartialEq for Sink {
+    fn eq(&self, other: &Self) -> bool {
+        return self.name == other.name
+            && self.description == other.description
+            && self.volume.get() == other.volume.get()
+            && self.mute == other.mute
+            && self.card_index == other.card_index;
+    }
+}
+
 fn get_sinks(introspector: &Introspector, tx: flume::Sender<Message>) {
     let sinks = Arc::new(RwLock::new(Vec::<Sink>::new()));
     let sinks_ref = Arc::clone(&sinks);
@@ -384,6 +395,14 @@ pub struct Source {
     pub name: String,
     pub description: String,
     pub volume: ChannelVolumes,
+}
+
+impl PartialEq for Source {
+    fn eq(&self, other: &Self) -> bool {
+        return self.name == other.name
+            && self.description == other.description
+            && self.volume.get() == other.volume.get();
+    }
 }
 
 fn get_sources(introspector: &Introspector, tx: flume::Sender<Message>) {
@@ -526,7 +545,7 @@ fn get_default_devices(introspector: &Introspector, tx: flume::Sender<Message>) 
     });
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Card {
     pub name: String,
     pub index: u32,
@@ -534,7 +553,7 @@ pub struct Card {
     pub selected_profile: Option<Profile>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Profile {
     pub name: String,
     pub description: String,

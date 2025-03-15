@@ -32,6 +32,7 @@ pub enum SinkMessage {
     EventDefaultSinkChanged(Option<String>),
 }
 
+#[derive(Debug)]
 pub struct SinkWidget {
     pub ui_selected_sink: Option<String>,
     pub ui_sink_selected_profile: Option<String>,

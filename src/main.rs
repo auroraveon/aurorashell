@@ -37,6 +37,7 @@ pub fn main() -> iced::Result {
         .run_with(App::new)
 }
 
+#[derive(Debug)]
 struct App {
     base_16_theme: Base16Theme,
     font: Font,
@@ -106,9 +107,9 @@ pub enum Message {
     SourceVolume(f32),
 
     // --- pulseaudio events ---
-    SourcesChanged(Vec<Source>),
-    DefaultSourceChanged(Option<String>),
-    CardsChanged(Vec<Card>),
+    EventSourcesChanged(Vec<Source>),
+    EventDefaultSourceChanged(Option<String>),
+    EventCardsChanged(Vec<Card>),
 }
 
 impl App {
@@ -226,7 +227,7 @@ impl App {
 
                 set_volume(source, *self.source_volume.read().unwrap());
             }
-            Message::SourcesChanged(sources) => {
+            Message::EventSourcesChanged(sources) => {
                 self.sources = sources;
 
                 if let Some(source) = &self.default_source {
@@ -243,7 +244,7 @@ impl App {
                     }
                 }
             }
-            Message::DefaultSourceChanged(source) => {
+            Message::EventDefaultSourceChanged(source) => {
                 self.default_source = source.clone();
 
                 if let Some(source) = source {
@@ -260,10 +261,10 @@ impl App {
                     }
                 }
             }
-            Message::CardsChanged(cards) => {
+            Message::EventCardsChanged(cards) => {
                 self.cards = cards.clone();
 
-                println!("AM FOX :D");
+                //println!("AM FOX :D");
 
                 let sink: Sink = {
                     let mut sink: Option<Sink> = None;
@@ -470,26 +471,26 @@ impl App {
                         match msg {
                             audio::Message::SinksChanged(sinks) => {
                                 if let Err(err) = chan.send(Message::Sink(SinkMessage::EventSinksChanged(sinks))).await {
-                                    eprintln!("error while sending Message:SinksChanged: {}", err);
+                                    eprintln!("error while sending Message:EventSinksChanged: {}", err);
                                 }
                             },
                             audio::Message::DefaultSinkChanged(sink) => {
                                 if let Err(err) = chan.send(Message::Sink(SinkMessage::EventDefaultSinkChanged(sink))).await {
-                                    eprintln!("error while sending Message:DefaultSinkChanged: {}", err);
+                                    eprintln!("error while sending Message:EventDefaultSinkChanged: {}", err);
                                 }
                             },
                             audio::Message::SourcesChanged(sources) => {
-                                if let Err(err) = chan.send(Message::SourcesChanged(sources)).await {
+                                if let Err(err) = chan.send(Message::EventSourcesChanged(sources)).await {
                                     eprintln!("error while sending Message:SourcesChanged: {}", err);
                                 }
                             },
                             audio::Message::DefaultSourceChanged(source) => {
-                                if let Err(err) = chan.send(Message::DefaultSourceChanged(source)).await {
+                                if let Err(err) = chan.send(Message::EventDefaultSourceChanged(source)).await {
                                     eprintln!("error while sending Message:DefaultSourceChanged: {}", err);
                                 }
                             },
                             audio::Message::CardsChanged(cards) => {
-                                if let Err(err) = chan.send(Message::CardsChanged(cards)).await {
+                                if let Err(err) = chan.send(Message::EventCardsChanged(cards)).await {
                                     eprintln!("error while sending Message:CardsChanged: {}", err);
                                 }
                             }
@@ -541,5 +542,209 @@ impl App {
                 };
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        App, Message, PULSE_MAX_VOLUME,
+        audio::{Card, Profile, Request, Sink, Source},
+        sink::SinkMessage,
+    };
+
+    use pulse::volume::{ChannelVolumes, Volume};
+
+    /// tests the order of events on startup to make sure everything loaded properly
+    #[test]
+    fn test_app_start_event_order() {
+        let sinks = vec![
+            Sink {
+                name: String::from("sink_1"),
+                description: String::from("Sink 1"),
+                volume: ChannelVolumes::default(),
+                mute: false,
+                card_index: Some(97),
+            },
+            Sink {
+                name: String::from("sink_2"),
+                description: String::from("Sink 2"),
+                volume: ChannelVolumes::default(),
+                mute: false,
+                card_index: Some(117),
+            },
+        ];
+
+        let default_sink = sinks[0].name.clone();
+
+        let sources = vec![
+            Source {
+                name: String::from("source_1"),
+                description: String::from("Sink 1"),
+                volume: ChannelVolumes::default(),
+            },
+            Source {
+                name: String::from("source_2"),
+                description: String::from("Sink 2"),
+                volume: ChannelVolumes::default(),
+            },
+        ];
+
+        let default_source = sources[0].name.clone();
+
+        let cards = vec![
+            Card {
+                name: String::from("card_1"),
+                index: 97,
+                profiles: vec![
+                    Profile {
+                        name: String::from("card_1_profile_1"),
+                        description: String::from("Card 1 Profile 1"),
+                    },
+                    Profile {
+                        name: String::from("card_1_profile_2"),
+                        description: String::from("Card 1 Profile 2"),
+                    },
+                ],
+                selected_profile: Some(Profile {
+                    name: String::from("card_1_profile_1"),
+                    description: String::from("Card 1 Profile 1"),
+                }),
+            },
+            Card {
+                name: String::from("card_2"),
+                index: 117,
+                profiles: vec![
+                    Profile {
+                        name: String::from("card_2_profile_1"),
+                        description: String::from("Card 2 Profile 1"),
+                    },
+                    Profile {
+                        name: String::from("card_2_profile_2"),
+                        description: String::from("Card 2 Profile 2"),
+                    },
+                ],
+                selected_profile: Some(Profile {
+                    name: String::from("card_2_profile_1"),
+                    description: String::from("Card 2 Profile 1"),
+                }),
+            },
+        ];
+
+        // note: only sends messages that the pulseaudio event loop will send at startup
+        let mut messages: Vec<Message> = vec![
+            Message::Sink(SinkMessage::EventSinksChanged(sinks.to_vec())),
+            Message::Sink(SinkMessage::EventDefaultSinkChanged(Some(
+                default_sink.clone(),
+            ))),
+            Message::EventSourcesChanged(sources.to_vec()),
+            Message::EventDefaultSourceChanged(Some(default_source.clone())),
+            Message::EventCardsChanged(cards.to_vec()),
+        ];
+
+        // we calculate all orders in which the events can occur
+        let permutations = quick_permutations(&mut messages);
+
+        let mut failures: Vec<(App, Vec<Message>)> = Vec::new();
+
+        // need to pass this to the app as code paths in the app's update function
+        // check if app.sender is not None
+        let (tx, _) = flume::bounded::<Request>(1);
+
+        for perm in permutations {
+            let mut app = App::default();
+
+            let _ = app.update(Message::ChannelCreated(tx.clone()));
+
+            for msg in &perm {
+                let _ = app.update(msg.clone());
+            }
+
+            let Volume(volume) = app.sink.sinks[0].volume.avg();
+            let sink_volume = f32::round(volume as f32 / PULSE_MAX_VOLUME as f32 * 100.0);
+
+            let Volume(volume) = app.sources[0].volume.avg();
+            let source_volume = f32::round(volume as f32 / PULSE_MAX_VOLUME as f32 * 100.0);
+
+            // i actually stopped caring about unwrapping here :3
+            if app.sink.default_sink != Some(default_sink.clone())
+                || app.sink.sinks != sinks
+                || app.sink.ui_selected_sink != Some(app.sink.sinks[0].description.clone())
+                || app.sink.ui_sink_selected_profile
+                    != Some(app.cards[0].selected_profile.clone().unwrap().description)
+                || *app.sink.ui_sink_volume.read().unwrap() != sink_volume
+                || app.sink.ui_sink_mute != sinks[0].mute
+                || app.default_source != Some(default_source.clone())
+                || app.sources != sources
+                || app.selected_source != Some(app.sources[0].description.clone())
+                || *app.source_volume.read().unwrap() != source_volume
+                || app.cards != cards
+            {
+                let _ = &failures.push((app, perm));
+            }
+        }
+
+        for (app, messages) in &failures {
+            println!("--------------------");
+            println!("Fail order:");
+
+            for message in messages {
+                match message {
+                    Message::Sink(msg) => match msg {
+                        SinkMessage::EventSinksChanged(_) => {
+                            println!("SinkMessage::EventSinksChanged");
+                        }
+                        SinkMessage::EventDefaultSinkChanged(_) => {
+                            println!("SinkMessage::EventDefaultSinkChanged");
+                        }
+                        _ => {}
+                    },
+                    Message::EventSourcesChanged(_) => {
+                        println!("SourceMessage::EventSourcesChanged");
+                    }
+                    Message::EventDefaultSourceChanged(_) => {
+                        println!("SourceMessage::EventDefaultSourceChanged");
+                    }
+                    Message::EventCardsChanged(_) => {
+                        println!("Message::EventCardsChanged");
+                    }
+                    _ => {}
+                };
+            }
+
+            println!("--------------------");
+        }
+
+        if failures.len() > 0 {
+            println!("amount of failures: {}", failures.len());
+        }
+
+        assert!(&failures.is_empty());
+    }
+
+    // i found this algorithm online because i didn't wanna feel like am wasting my time lol qwq
+    // i might come back and write my own tho :3
+    fn quick_permutations<T: Clone>(elements: &mut Vec<T>) -> Vec<Vec<T>> {
+        let n = elements.len();
+        let mut permutations = Vec::new();
+        let mut p: Vec<usize> = (0..=n).collect(); // initialize array p with 0 to n
+
+        permutations.push(elements.clone()); // add initial permutation
+        let mut index = 1;
+
+        while index < n {
+            p[index] -= 1;
+            let j = if index % 2 == 1 { p[index] } else { 0 };
+            elements.swap(j, index);
+            permutations.push(elements.clone()); // store permutation
+            index = 1;
+
+            while p[index] == 0 {
+                p[index] = index;
+                index += 1;
+            }
+        }
+
+        return permutations;
     }
 }
