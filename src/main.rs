@@ -398,14 +398,27 @@ impl App {
                     .style(theme::text_style(&self.base_16_theme))
                     .font(self.font)
                     .size(11),
-                slider(0.0..=100.0, *self.source_volume.read().unwrap(), |volume| {
-                    Message::SourceVolume(volume)
-                })
-                .style(theme::slider_style(&self.base_16_theme))
-                .step(5.0)
-                .shift_step(1.0),
+                container(
+                    slider(0.0..=100.0, *self.source_volume.read().unwrap(), |volume| {
+                        Message::SourceVolume(volume)
+                    })
+                    .style(theme::slider_style(&self.base_16_theme))
+                    .step(5.0)
+                    .shift_step(1.0),
+                )
+                .height(8)
+                .style(|_: &Theme| container::Style {
+                    background: Some(Background::Color(self.base_16_theme.color00)),
+                    border: iced::Border {
+                        color: Color::TRANSPARENT,
+                        width: 0.0,
+                        radius: iced::Radius::new(128),
+                    },
+                    ..container::Style::default()
+                }),
             ]
-            .spacing(8),
+            .spacing(8)
+            .align_y(Vertical::Center),
         ]
         .spacing(8);
 
