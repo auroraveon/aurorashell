@@ -71,9 +71,9 @@ impl Default for SinkWidget {
 
 impl SinkWidget {
     fn get_default_sink(&self) -> Option<Sink> {
-        if let Some(sink) = &self.ui_selected_sink {
+        if let Some(sink) = &self.default_sink {
             for s in &self.sinks {
-                if sink == &s.description {
+                if sink == &s.name {
                     return Some(s.clone());
                 }
             }
@@ -220,21 +220,30 @@ impl SinkWidget {
             SinkMessage::EventSinksChanged(sinks) => {
                 self.sinks = sinks;
 
-                if let Some(sink) = &self.default_sink {
-                    for s in &self.sinks {
-                        if sink == &s.name {
-                            self.ui_selected_sink = Some(s.description.clone());
+                let sink: Sink = match self.get_default_sink() {
+                    Some(sink) => sink,
+                    None => return command,
+                };
 
-                            let Volume(volume) = s.volume.avg();
-                            *self.ui_sink_volume.write().unwrap() =
-                                f32::round(volume as f32 / PULSE_MAX_VOLUME as f32 * 100.0);
+                self.ui_selected_sink = Some(sink.description.clone());
 
-                            self.ui_sink_mute = s.mute;
+                if let Some(index) = sink.card_index {
+                    for card in cards {
+                        if index != card.index {
+                            continue;
+                        }
 
-                            break;
+                        if let Some(profile) = &card.selected_profile {
+                            self.ui_sink_selected_profile = Some(profile.description.clone());
                         }
                     }
                 }
+
+                let Volume(volume) = sink.volume.avg();
+                *self.ui_sink_volume.write().unwrap() =
+                    f32::round(volume as f32 / PULSE_MAX_VOLUME as f32 * 100.0);
+
+                self.ui_sink_mute = sink.mute;
             }
             SinkMessage::EventDefaultSinkChanged(sink) => {
                 self.default_sink = sink.clone();
