@@ -365,9 +365,9 @@ impl App {
                     .step(5.0)
                     .shift_step(1.0)
                 )
-                .height(8)
+                .height(6)
                 .style(|_: &Theme| container::Style {
-                    background: Some(Background::Color(self.base_16_theme.color00)),
+                    background: Some(Background::Color(self.base_16_theme.color01)),
                     border: iced::Border {
                         color: Color::TRANSPARENT,
                         width: 0.0,
@@ -406,9 +406,9 @@ impl App {
                     .step(5.0)
                     .shift_step(1.0),
                 )
-                .height(8)
+                .height(6)
                 .style(|_: &Theme| container::Style {
-                    background: Some(Background::Color(self.base_16_theme.color00)),
+                    background: Some(Background::Color(self.base_16_theme.color01)),
                     border: iced::Border {
                         color: Color::TRANSPARENT,
                         width: 0.0,

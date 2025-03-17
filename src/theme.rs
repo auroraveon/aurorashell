@@ -129,21 +129,21 @@ pub fn text_style(theme: &Base16Theme) -> text::StyleFn<Theme> {
 
 pub fn pick_list_style(theme: &Base16Theme) -> pick_list::StyleFn<Theme> {
     return Box::new(|_: &Theme, _status: pick_list::Status| pick_list::Style {
-        background: Background::Color(theme.color01),
+        background: Background::Color(theme.background),
         text_color: theme.foreground,
-        placeholder_color: theme.color12,
+        placeholder_color: theme.foreground,
         handle_color: theme.color14,
-        border: border::width(1).rounded(4).color(theme.color04),
+        border: border::width(1).rounded(4).color(theme.color01),
     });
 }
 
 pub fn pick_list_menu_style(theme: &Base16Theme) -> menu::StyleFn<Theme> {
     return Box::new(|_: &Theme| menu::Style {
-        background: Background::Color(theme.color00),
+        background: Background::Color(theme.background),
         text_color: theme.foreground,
-        selected_background: Background::Color(theme.color12),
-        selected_text_color: theme.color14,
-        border: border::width(1).rounded(4).color(theme.color04),
+        selected_background: Background::Color(theme.color05),
+        selected_text_color: theme.background,
+        border: border::width(1).rounded(4).color(theme.color01),
     });
 }
 
@@ -152,9 +152,9 @@ pub fn slider_style(theme: &Base16Theme) -> slider::StyleFn<Theme> {
         rail: slider::Rail {
             backgrounds: (
                 Background::Color(theme.color13),
-                Background::Color(theme.color00),
+                Background::Color(theme.color01),
             ),
-            width: 8.0,
+            width: 6.0,
             border: border::width(0).color(theme.background).rounded(128),
         },
         breakpoint: slider::Breakpoint {
