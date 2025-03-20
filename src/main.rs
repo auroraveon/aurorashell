@@ -17,7 +17,7 @@ use iced::platform_specific::shell::commands::layer_surface::{
 use iced::runtime::platform_specific::wayland::layer_surface::IcedMargin;
 use iced::widget::{button, column, container, pick_list, row, slider, text};
 use iced::window::Id;
-use iced::{Background, Color, Element, Font, Subscription, Task, Theme, border, stream};
+use iced::{Background, Color, Element, Font, Length, Subscription, Task, Theme, border, stream};
 
 use pulse::volume::Volume;
 use sink::{SinkMessage, SinkWidget};
