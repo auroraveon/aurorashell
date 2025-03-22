@@ -424,10 +424,18 @@ impl App {
 
         container(column![sink_ui, source_ui].padding(16).spacing(16))
             .style(|_: &Theme| container::Style {
-                background: Some(Background::Color(self.base_16_theme.background)),
-                border: border::width(2.0)
-                    .rounded(16)
-                    .color(self.base_16_theme.color01),
+                background: Some(Background::Color(Color::from_rgba(
+                    self.base_16_theme.background.r,
+                    self.base_16_theme.background.g,
+                    self.base_16_theme.background.b,
+                    0.8,
+                ))),
+                border: border::width(2.0).rounded(16).color(Color::from_rgba(
+                    self.base_16_theme.color01.r,
+                    self.base_16_theme.color01.g,
+                    self.base_16_theme.color01.b,
+                    0.8,
+                )),
                 ..container::Style::default()
             })
             .into()
