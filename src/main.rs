@@ -6,7 +6,6 @@ use audio::{Card, Request, Sink, Source};
 
 use chrono::{DateTime, TimeDelta, Utc};
 
-use iced::advanced::layout::Limits;
 use iced::alignment::Vertical;
 use iced::daemon::Appearance;
 use iced::futures::{SinkExt, Stream};
@@ -17,7 +16,7 @@ use iced::platform_specific::shell::commands::layer_surface::{
 use iced::runtime::platform_specific::wayland::layer_surface::IcedMargin;
 use iced::widget::{button, column, container, pick_list, row, slider, text};
 use iced::window::Id;
-use iced::{Background, Color, Element, Font, Length, Subscription, Task, Theme, border, stream};
+use iced::{Background, Color, Element, Font, Subscription, Task, Theme, border, stream};
 
 use pulse::volume::Volume;
 use sink::{SinkMessage, SinkWidget};
@@ -39,8 +38,11 @@ pub fn main() -> iced::Result {
 
 #[derive(Debug)]
 struct App {
-    base_16_theme: Base16Theme,
+    bar_surface_id: Id,
+    popup_surface_id: Id,
     font: Font,
+    base_16_theme: Base16Theme,
+
     sender: Option<flume::Sender<Request>>,
     update_frequency: TimeDelta,
 
@@ -64,37 +66,6 @@ struct App {
     cards: Vec<Card>,
 }
 
-impl Default for App {
-    fn default() -> Self {
-        let theme = match Base16Theme::from_config() {
-            Ok(theme) => theme,
-            Err(e) => {
-                // todo: should prob not just panic but its not like i wanna
-                // continue to load anyway soooooo >:3
-                panic!("error occured while loading theme: {e}");
-            }
-        };
-
-        Self {
-            base_16_theme: theme,
-            font: Font::with_name("DepartureMono Nerd Font"),
-            sender: None,
-            update_frequency: TimeDelta::milliseconds(100),
-            // widgets
-            sink: SinkWidget::default(),
-            // default source stuff
-            sources: vec![],
-            selected_source: None,
-            default_source: None,
-            source_volume: Arc::new(RwLock::new(55.0)),
-            source_last_update_time: Utc::now(),
-            source_will_set_volume: false,
-            // cards
-            cards: vec![],
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub enum Message {
     /// event for when the sender is created
@@ -114,23 +85,66 @@ pub enum Message {
 
 impl App {
     fn new() -> (App, Task<Message>) {
-        let mut initial_surface = SctkLayerSurfaceSettings::default();
-
-        initial_surface.namespace = "aurorashell".to_string();
-        initial_surface.layer = Layer::Top;
-        initial_surface.anchor = Anchor::TOP | Anchor::RIGHT;
-        initial_surface.margin = IcedMargin {
-            top: 12,
-            right: 20,
-            bottom: 0,
-            left: 0,
+        let theme = match Base16Theme::from_config() {
+            Ok(theme) => theme,
+            Err(e) => {
+                // todo: should prob not just panic but its not like i wanna
+                // continue to load anyway if this fails soooooo >:3
+                panic!("error occured while loading theme: {e}");
+            }
         };
-        initial_surface.size_limits = Limits::NONE;
-        initial_surface.size = Some((Some(320), Some(240)));
 
-        initial_surface.keyboard_interactivity = KeyboardInteractivity::OnDemand;
+        let bar_surface_id = Id::unique();
+        let bar_surface = get_layer_surface(SctkLayerSurfaceSettings {
+            id: bar_surface_id,
+            namespace: "aurorashell".to_string(),
+            layer: Layer::Top,
+            anchor: Anchor::TOP,
+            size: Some((None, Some(24))),
+            exclusive_zone: 24,
+            keyboard_interactivity: KeyboardInteractivity::None,
+            ..Default::default()
+        });
 
-        (Self::default(), get_layer_surface(initial_surface))
+        let popup_surface_id = Id::unique();
+        let popup_surface = get_layer_surface(SctkLayerSurfaceSettings {
+            id: popup_surface_id,
+            namespace: "aurorashell".to_string(),
+            layer: Layer::Top,
+            anchor: Anchor::TOP | Anchor::RIGHT,
+            size: Some((Some(320), Some(240))),
+            margin: IcedMargin {
+                top: 12,
+                right: 20,
+                bottom: 0,
+                left: 0,
+            },
+            keyboard_interactivity: KeyboardInteractivity::None,
+            ..Default::default()
+        });
+
+        (
+            Self {
+                bar_surface_id,
+                popup_surface_id,
+                font: Font::with_name("DepartureMono Nerd Font"),
+                base_16_theme: theme,
+                sender: None,
+                update_frequency: TimeDelta::milliseconds(100),
+                // widgets
+                sink: SinkWidget::default(),
+                // default source stuff
+                sources: vec![],
+                selected_source: None,
+                default_source: None,
+                source_volume: Arc::new(RwLock::new(55.0)),
+                source_last_update_time: Utc::now(),
+                source_will_set_volume: false,
+                // cards
+                cards: vec![],
+            },
+            Task::batch(vec![bar_surface, popup_surface]),
+        )
     }
 
     fn title(&self, _id: Id) -> String {
@@ -304,141 +318,145 @@ impl App {
         return command;
     }
 
-    fn view(&self, _: Id) -> Element<Message> {
-        let sinks = self
-            .sink
-            .sinks
-            .iter()
-            .map(|sink| sink.description.clone())
-            .collect::<Vec<String>>();
+    fn view(&self, id: Id) -> Element<Message> {
+        if id == self.popup_surface_id {
+            let sinks = self
+                .sink
+                .sinks
+                .iter()
+                .map(|sink| sink.description.clone())
+                .collect::<Vec<String>>();
 
-        let sources = self
-            .sources
-            .iter()
-            .map(|source| source.description.clone())
-            .collect::<Vec<String>>();
+            let sources = self
+                .sources
+                .iter()
+                .map(|source| source.description.clone())
+                .collect::<Vec<String>>();
 
-        let sink_ui = column![
-            text("Output")
-                .style(theme::text_style(&self.base_16_theme))
-                .font(self.font)
-                .size(11),
-            pick_list(sinks.clone(), self.sink.ui_selected_sink.clone(), |sink| {
-                Message::Sink(SinkMessage::UISelectedSinkChanged(sink))
-            })
-            .style(theme::pick_list_style(&self.base_16_theme))
-            .menu_style(theme::pick_list_menu_style(&self.base_16_theme))
-            .font(self.font)
-            .text_size(11)
-            .text_wrap(text::Wrapping::WordOrGlyph),
-            pick_list(
-                self.sink.sink_profiles.clone(),
-                self.sink.ui_sink_selected_profile.clone(),
-                |profile| { Message::Sink(SinkMessage::UISinkProfile(profile)) }
-            )
-            .style(theme::pick_list_style(&self.base_16_theme))
-            .menu_style(theme::pick_list_menu_style(&self.base_16_theme))
-            .font(self.font)
-            .text_size(11),
-            row![
-                button(
-                    text(match self.sink.ui_sink_mute {
-                        true => "",
-                        false => "",
-                    })
-                    .font(self.font)
-                    .size(11)
-                )
-                .on_press(Message::Sink(SinkMessage::UISinkMute))
-                .style(theme::volume_button_style(&self.base_16_theme)),
-                text(format!("{}%", *self.sink.ui_sink_volume.read().unwrap()))
+            let sink_ui = column![
+                text("Output")
                     .style(theme::text_style(&self.base_16_theme))
                     .font(self.font)
                     .size(11),
-                container(
-                    slider(
-                        0.0..=100.0,
-                        *self.sink.ui_sink_volume.read().unwrap(),
-                        |volume| { Message::Sink(SinkMessage::UISinkVolume(volume)) }
+                pick_list(sinks.clone(), self.sink.ui_selected_sink.clone(), |sink| {
+                    Message::Sink(SinkMessage::UISelectedSinkChanged(sink))
+                })
+                .style(theme::pick_list_style(&self.base_16_theme))
+                .menu_style(theme::pick_list_menu_style(&self.base_16_theme))
+                .font(self.font)
+                .text_size(11)
+                .text_wrap(text::Wrapping::WordOrGlyph),
+                pick_list(
+                    self.sink.sink_profiles.clone(),
+                    self.sink.ui_sink_selected_profile.clone(),
+                    |profile| { Message::Sink(SinkMessage::UISinkProfile(profile)) }
+                )
+                .style(theme::pick_list_style(&self.base_16_theme))
+                .menu_style(theme::pick_list_menu_style(&self.base_16_theme))
+                .font(self.font)
+                .text_size(11),
+                row![
+                    button(
+                        text(match self.sink.ui_sink_mute {
+                            true => "",
+                            false => "",
+                        })
+                        .font(self.font)
+                        .size(11)
                     )
-                    .style(theme::slider_style(&self.base_16_theme))
-                    .step(5.0)
-                    .shift_step(1.0)
-                )
-                .height(6)
-                .style(|_: &Theme| container::Style {
-                    background: Some(Background::Color(self.base_16_theme.color01)),
-                    border: iced::Border {
-                        color: Color::TRANSPARENT,
-                        width: 0.0,
-                        radius: iced::Radius::new(128),
-                    },
-                    ..container::Style::default()
-                }),
+                    .on_press(Message::Sink(SinkMessage::UISinkMute))
+                    .style(theme::volume_button_style(&self.base_16_theme)),
+                    text(format!("{}%", *self.sink.ui_sink_volume.read().unwrap()))
+                        .style(theme::text_style(&self.base_16_theme))
+                        .font(self.font)
+                        .size(11),
+                    container(
+                        slider(
+                            0.0..=100.0,
+                            *self.sink.ui_sink_volume.read().unwrap(),
+                            |volume| { Message::Sink(SinkMessage::UISinkVolume(volume)) }
+                        )
+                        .style(theme::slider_style(&self.base_16_theme))
+                        .step(5.0)
+                        .shift_step(1.0)
+                    )
+                    .height(6)
+                    .style(|_: &Theme| container::Style {
+                        background: Some(Background::Color(self.base_16_theme.color01)),
+                        border: iced::Border {
+                            color: Color::TRANSPARENT,
+                            width: 0.0,
+                            radius: iced::Radius::new(128),
+                        },
+                        ..container::Style::default()
+                    }),
+                ]
+                .spacing(8)
+                .align_y(Vertical::Center),
             ]
-            .spacing(8)
-            .align_y(Vertical::Center),
-        ]
-        .spacing(8);
+            .spacing(8);
 
-        let source_ui = column![
-            text("Input")
-                .style(theme::text_style(&self.base_16_theme))
-                .font(self.font)
-                .size(11),
-            pick_list(sources.clone(), self.selected_source.clone(), |source| {
-                Message::SelectedSourceChanged(source)
-            })
-            .style(theme::pick_list_style(&self.base_16_theme))
-            .menu_style(theme::pick_list_menu_style(&self.base_16_theme))
-            .font(self.font)
-            .text_size(11),
-            row![
-                text(format!("{}%", *self.source_volume.read().unwrap()))
+            let source_ui = column![
+                text("Input")
                     .style(theme::text_style(&self.base_16_theme))
                     .font(self.font)
                     .size(11),
-                container(
-                    slider(0.0..=100.0, *self.source_volume.read().unwrap(), |volume| {
-                        Message::SourceVolume(volume)
-                    })
-                    .style(theme::slider_style(&self.base_16_theme))
-                    .step(5.0)
-                    .shift_step(1.0),
-                )
-                .height(6)
-                .style(|_: &Theme| container::Style {
-                    background: Some(Background::Color(self.base_16_theme.color01)),
-                    border: iced::Border {
-                        color: Color::TRANSPARENT,
-                        width: 0.0,
-                        radius: iced::Radius::new(128),
-                    },
-                    ..container::Style::default()
-                }),
+                pick_list(sources.clone(), self.selected_source.clone(), |source| {
+                    Message::SelectedSourceChanged(source)
+                })
+                .style(theme::pick_list_style(&self.base_16_theme))
+                .menu_style(theme::pick_list_menu_style(&self.base_16_theme))
+                .font(self.font)
+                .text_size(11),
+                row![
+                    text(format!("{}%", *self.source_volume.read().unwrap()))
+                        .style(theme::text_style(&self.base_16_theme))
+                        .font(self.font)
+                        .size(11),
+                    container(
+                        slider(0.0..=100.0, *self.source_volume.read().unwrap(), |volume| {
+                            Message::SourceVolume(volume)
+                        })
+                        .style(theme::slider_style(&self.base_16_theme))
+                        .step(5.0)
+                        .shift_step(1.0),
+                    )
+                    .height(6)
+                    .style(|_: &Theme| container::Style {
+                        background: Some(Background::Color(self.base_16_theme.color01)),
+                        border: iced::Border {
+                            color: Color::TRANSPARENT,
+                            width: 0.0,
+                            radius: iced::Radius::new(128),
+                        },
+                        ..container::Style::default()
+                    }),
+                ]
+                .spacing(8)
+                .align_y(Vertical::Center),
             ]
-            .spacing(8)
-            .align_y(Vertical::Center),
-        ]
-        .spacing(8);
+            .spacing(8);
 
-        container(column![sink_ui, source_ui].padding(16).spacing(16))
-            .style(|_: &Theme| container::Style {
-                background: Some(Background::Color(Color::from_rgba(
-                    self.base_16_theme.background.r,
-                    self.base_16_theme.background.g,
-                    self.base_16_theme.background.b,
-                    0.8,
-                ))),
-                border: border::width(2.0).rounded(16).color(Color::from_rgba(
-                    self.base_16_theme.color01.r,
-                    self.base_16_theme.color01.g,
-                    self.base_16_theme.color01.b,
-                    0.8,
-                )),
-                ..container::Style::default()
-            })
-            .into()
+            container(column![sink_ui, source_ui].padding(16).spacing(16))
+                .style(|_: &Theme| container::Style {
+                    background: Some(Background::Color(Color::from_rgba(
+                        self.base_16_theme.background.r,
+                        self.base_16_theme.background.g,
+                        self.base_16_theme.background.b,
+                        0.8,
+                    ))),
+                    border: border::width(2.0).rounded(16).color(Color::from_rgba(
+                        self.base_16_theme.color01.r,
+                        self.base_16_theme.color01.g,
+                        self.base_16_theme.color01.b,
+                        0.8,
+                    )),
+                    ..container::Style::default()
+                })
+                .into()
+        } else {
+            row![].into()
+        }
     }
 
     fn subscription(&self) -> Subscription<Message> {
