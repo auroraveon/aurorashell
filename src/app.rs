@@ -187,26 +187,7 @@ impl App {
         return command;
     }
 
-    pub fn view(&self, id: Id) -> Element<AppMessage> {
-        // note: remove after, being kept around as reference
-        let x: Element<AppMessage> = container(column![text("awrawrawr")].padding(16).spacing(16))
-            .style(|_: &Theme| container::Style {
-                background: Some(Background::Color(Color::from_rgba(
-                    self.base_16_theme.background.r,
-                    self.base_16_theme.background.g,
-                    self.base_16_theme.background.b,
-                    0.8,
-                ))),
-                border: border::width(2.0).rounded(16).color(Color::from_rgba(
-                    self.base_16_theme.color01.r,
-                    self.base_16_theme.color01.g,
-                    self.base_16_theme.color01.b,
-                    0.8,
-                )),
-                ..container::Style::default()
-            })
-            .into();
-
+    pub fn view(&self, id: Id) -> Element<'_, AppMessage> {
         if let Some(wasm) = &self.runtime.wasm {
             if let Some(module_id) = wasm.surface_module_ids.get(&id) {
                 if let Some(map) = wasm.module_ui_trees.get(module_id) {
@@ -246,7 +227,7 @@ impl App {
     }
 }
 
-pub fn build_tree(module_id: u32, surface_id: Id, node: &WasmUiNode) -> Element<AppMessage> {
+pub fn build_tree(module_id: u32, surface_id: Id, node: &WasmUiNode) -> Element<'_, AppMessage> {
     match node {
         WasmUiNode::Row { children } => Row::with_children(
             children

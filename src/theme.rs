@@ -121,13 +121,13 @@ impl Base16Color {
     }
 }
 
-pub fn text_style(theme: &Base16Color) -> text::StyleFn<Theme> {
+pub fn text_style(theme: &Base16Color) -> text::StyleFn<'_, Theme> {
     return Box::new(|_: &Theme| text::Style {
         color: Some(theme.foreground),
     });
 }
 
-pub fn pick_list_style(theme: &Base16Color) -> pick_list::StyleFn<Theme> {
+pub fn pick_list_style(theme: &Base16Color) -> pick_list::StyleFn<'_, Theme> {
     return Box::new(|_: &Theme, _status: pick_list::Status| pick_list::Style {
         background: Background::Color(theme.background),
         text_color: theme.foreground,
@@ -137,7 +137,7 @@ pub fn pick_list_style(theme: &Base16Color) -> pick_list::StyleFn<Theme> {
     });
 }
 
-pub fn pick_list_menu_style(theme: &Base16Color) -> menu::StyleFn<Theme> {
+pub fn pick_list_menu_style(theme: &Base16Color) -> menu::StyleFn<'_, Theme> {
     return Box::new(|_: &Theme| menu::Style {
         background: Background::Color(theme.background),
         text_color: theme.foreground,
@@ -147,7 +147,7 @@ pub fn pick_list_menu_style(theme: &Base16Color) -> menu::StyleFn<Theme> {
     });
 }
 
-pub fn slider_style(theme: &Base16Color) -> slider::StyleFn<Theme> {
+pub fn slider_style(theme: &Base16Color) -> slider::StyleFn<'_, Theme> {
     return Box::new(|_: &Theme, _status: slider::Status| slider::Style {
         rail: slider::Rail {
             backgrounds: (
@@ -169,7 +169,7 @@ pub fn slider_style(theme: &Base16Color) -> slider::StyleFn<Theme> {
     });
 }
 
-pub fn volume_button_style(theme: &Base16Color) -> button::StyleFn<Theme> {
+pub fn volume_button_style(theme: &Base16Color) -> button::StyleFn<'_, Theme> {
     return Box::new(|_: &Theme, _status: button::Status| button::Style {
         background: None,
         text_color: theme.color05,

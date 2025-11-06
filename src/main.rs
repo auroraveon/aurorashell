@@ -3,9 +3,10 @@ mod runtime;
 mod services;
 mod theme;
 
+use app::App;
+
 use std::time::SystemTime;
 
-use app::App;
 use clap::Parser;
 use clap::builder::TypedValueParser;
 use fern::colors::{Color, ColoredLevelConfig};
