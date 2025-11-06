@@ -8,6 +8,7 @@ use iced::overlay::menu;
 use iced::widget::{button, pick_list, slider};
 use iced::{Background, Color, Radius, Theme, border, color};
 
+// todo: maybe create a default color palette?
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Base16Color {

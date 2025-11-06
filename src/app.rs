@@ -66,11 +66,7 @@ impl App {
     pub fn new() -> (App, Task<AppMessage>) {
         let theme = match Base16Color::from_config() {
             Ok(theme) => theme,
-            Err(e) => {
-                // todo: should prob not just panic but its not like i wanna
-                // continue to load anyway if this fails soooooo >:3
-                panic!("error occured while loading theme: {e}");
-            }
+            Err(_) => Base16Color::default(),
         };
 
         (
