@@ -13,14 +13,22 @@ iced = { git = "https://github.com/pop-os/iced", features = [
   "lazy",
   "advanced"
 ] }
-tokio = { version = "1.43.0", features = ["full"] }
-pulse = { package = "libpulse-binding", version = "2.28.2" }
-config = { version = "0.15.9", default-features = false, features = ["toml"] }
 
-iced_futures = "0.13.2"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
 
-anyhow = "1.0.97"
-chrono = "0.4.40"
-flume = "0.11.1"
-wasmer = "5.0.4"
+wasmtime = "32.0"
+wasmtime-wasi = "32.0"
+
+pulse = { package = "libpulse-binding", version = "2.28" }
+
+anyhow = "1.0"
+chrono = "0.4"
+clap = { version = "4.5", features = ["derive"] }
+config = { version = "0.15", default-features = false, features = ["toml"] }
+derivative = "2.2"
+fern = { version = "0.7", features = ["colored"] }
+flume = "0.11"
+humantime = "2.2"
+log = "0.4"
 

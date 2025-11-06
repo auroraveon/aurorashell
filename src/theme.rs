@@ -1,18 +1,16 @@
-use std::{collections::HashMap, env, path::PathBuf};
+use std::collections::HashMap;
+use std::env;
+use std::path::PathBuf;
 
 use config::Config;
-use iced::{
-    Background, Border, Color, Radius, Theme, border, color,
-    core::widget::text,
-    overlay::menu,
-    widget::{button, pick_list, slider},
-};
+use iced::core::widget::text;
+use iced::overlay::menu;
+use iced::widget::{button, pick_list, slider};
+use iced::{Background, Color, Radius, Theme, border, color};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Base16Theme {
-    pub background: Color,
-    pub foreground: Color,
+pub struct Base16Color {
     pub color00: Color,
     pub color01: Color,
     pub color02: Color,
@@ -29,14 +27,16 @@ pub struct Base16Theme {
     pub color13: Color,
     pub color14: Color,
     pub color15: Color,
+    pub background: Color,
+    pub foreground: Color,
 }
 
-impl Base16Theme {
+impl Base16Color {
     pub fn from_config() -> anyhow::Result<Self> {
         let home = match env::var("HOME") {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("no environment variable `HOME` or it could not be interpreted");
+                log::error!("no environment variable `HOME` or it could not be interpreted");
                 return Err(e.into());
             }
         };
@@ -59,7 +59,7 @@ impl Base16Theme {
         {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("could not get config");
+                log::error!("could not get config");
                 return Err(e.into());
             }
         };
@@ -67,7 +67,7 @@ impl Base16Theme {
         let colors = match colors.try_deserialize::<HashMap<String, String>>() {
             Ok(v) => v,
             Err(e) => {
-                eprintln!("could not parse config");
+                log::error!("could not parse config");
                 return Err(e.into());
             }
         };
@@ -121,13 +121,13 @@ impl Base16Theme {
     }
 }
 
-pub fn text_style(theme: &Base16Theme) -> text::StyleFn<Theme> {
+pub fn text_style(theme: &Base16Color) -> text::StyleFn<Theme> {
     return Box::new(|_: &Theme| text::Style {
         color: Some(theme.foreground),
     });
 }
 
-pub fn pick_list_style(theme: &Base16Theme) -> pick_list::StyleFn<Theme> {
+pub fn pick_list_style(theme: &Base16Color) -> pick_list::StyleFn<Theme> {
     return Box::new(|_: &Theme, _status: pick_list::Status| pick_list::Style {
         background: Background::Color(theme.background),
         text_color: theme.foreground,
@@ -137,7 +137,7 @@ pub fn pick_list_style(theme: &Base16Theme) -> pick_list::StyleFn<Theme> {
     });
 }
 
-pub fn pick_list_menu_style(theme: &Base16Theme) -> menu::StyleFn<Theme> {
+pub fn pick_list_menu_style(theme: &Base16Color) -> menu::StyleFn<Theme> {
     return Box::new(|_: &Theme| menu::Style {
         background: Background::Color(theme.background),
         text_color: theme.foreground,
@@ -147,7 +147,7 @@ pub fn pick_list_menu_style(theme: &Base16Theme) -> menu::StyleFn<Theme> {
     });
 }
 
-pub fn slider_style(theme: &Base16Theme) -> slider::StyleFn<Theme> {
+pub fn slider_style(theme: &Base16Color) -> slider::StyleFn<Theme> {
     return Box::new(|_: &Theme, _status: slider::Status| slider::Style {
         rail: slider::Rail {
             backgrounds: (
@@ -169,7 +169,7 @@ pub fn slider_style(theme: &Base16Theme) -> slider::StyleFn<Theme> {
     });
 }
 
-pub fn volume_button_style(theme: &Base16Theme) -> button::StyleFn<Theme> {
+pub fn volume_button_style(theme: &Base16Color) -> button::StyleFn<Theme> {
     return Box::new(|_: &Theme, _status: button::Status| button::Style {
         background: None,
         text_color: theme.color05,

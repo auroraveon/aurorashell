@@ -1,0 +1,10 @@
+[package]
+name = "test_module"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+aurorashell_module = { path = "lib/aurorashell_module" }

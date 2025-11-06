@@ -1,0 +1,8 @@
+[package]
+name = "aurorashell_module"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+common = { package = "aurorashell_module_common", path = "../aurorashell_module_common" }
+macros = { package = "aurorashell_module_macros", path = "../aurorashell_module_macros" }
