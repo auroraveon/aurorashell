@@ -313,9 +313,6 @@ impl AudioService {
                     }
                 };
 
-                // note: remove before push :3
-                log::debug!("*nuzzles u like the good girl fox i am* >:3");
-
                 match result {
                     ServiceRequest::Request { request } => match request {
                         Request::SetDefaultSink { name } => {

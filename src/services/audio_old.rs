@@ -619,9 +619,6 @@ impl AudioService {
                     }
                 };
 
-                // note: remove before push :3
-                log::debug!("*nuzzles u like the good girl fox i am* >:3");
-
                 match result {
                     ServiceRequest::RegisterModule { id, data } => {
                         // note: add actual tracing library
