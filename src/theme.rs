@@ -60,7 +60,7 @@ impl Base16Color {
         {
             Ok(v) => v,
             Err(e) => {
-                log::error!("could not get config");
+                log::error!("could not get colors.toml");
                 return Err(e.into());
             }
         };
@@ -68,7 +68,7 @@ impl Base16Color {
         let colors = match colors.try_deserialize::<HashMap<String, String>>() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("could not parse config");
+                log::error!("could not parse colors.toml");
                 return Err(e.into());
             }
         };
