@@ -59,3 +59,20 @@
                                 }
                             };
                         }
+
+/// the type of register
+/// should match up with `Event` above
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum RegisterType {
+    SinksChanged,
+    DefaultSinkChanged,
+
+    SourcesChanged,
+    DefaultSourceChanged,
+
+    CardsChanged,
+
+    SinkProfileChanged,
+    SourceProfileChanged,
+}
+
