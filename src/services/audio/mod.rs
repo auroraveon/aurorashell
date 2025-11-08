@@ -7,7 +7,8 @@ use messages::{Event, Request, get_cards, get_default_devices, get_sinks, get_so
 use state::AudioRequestThreadState;
 
 use crate::runtime::module::AudioRegisterData;
-use crate::services::{Service, ServiceEvent, ServiceRequest, ServiceState};
+use crate::services::audio::messages::AudioEventType;
+use crate::services::{ModuleIds, Service, ServiceEvent, ServiceRequest, ServiceState};
 
 use std::any::TypeId;
 use std::thread;
@@ -34,7 +35,7 @@ const CHANNEL_CAPACITY: usize = 64;
 
 /// the time between requesting pulseaudio to update a value that can
 /// be frequently updated (like volume) to stop us from spamming the server
-/// which is visually laggy
+/// which lags pulseaudio
 const UPDATE_INTERVAL: Duration = Duration::from_millis(100);
 
 /// 65536 represents 100% in pulseaudio
@@ -52,10 +53,11 @@ pub struct AudioService;
 
 impl Service for AudioService {
     type Event = Event;
-    type RegisterData = AudioRegisterData;
+    type EventType = AudioEventType;
     type Request = Request;
     type RuntimeData = (AudioRequestThreadState,);
     type State = AudioState;
+    type SubscriptionData = AudioRegisterData;
 
     fn subscribe() -> iced::Subscription<ServiceEvent<Self>> {
         let id = TypeId::of::<Self>();
@@ -63,6 +65,8 @@ impl Service for AudioService {
         Subscription::run_with_id(
             id,
             channel(CHANNEL_CAPACITY, async |mut chan| {
+                let mut module_ids = ModuleIds::new();
+
                 loop {
                     let mut state = AudioState::init();
 
@@ -84,7 +88,14 @@ impl Service for AudioService {
 
                     let mut runtime_data = (AudioRequestThreadState::init(tx),);
 
-                    let err = Self::run(&mut state, &mut chan, rx, &mut runtime_data).await;
+                    let err = Self::run(
+                        &mut state,
+                        &mut module_ids,
+                        &mut runtime_data,
+                        &mut chan,
+                        rx,
+                    )
+                    .await;
                     log::error!("[service:audio] mainloop error: {err}");
                 }
             }),
@@ -93,9 +104,10 @@ impl Service for AudioService {
 
     async fn run(
         state: &mut AudioState,
+        module_ids: &mut ModuleIds<Self>,
+        runtime_data: &mut (AudioRequestThreadState,),
         chan: &mut mpsc::Sender<ServiceEvent<Self>>,
         request_rx: flume::Receiver<ServiceRequest<Self>>,
-        runtime_data: &mut (AudioRequestThreadState,),
     ) -> anyhow::Error {
         log::info!("[service:audio] service started!");
 

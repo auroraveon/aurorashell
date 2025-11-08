@@ -69,7 +69,7 @@ pub trait RuntimeService: Debug + Clone + Sized {
 /// an id that represents an id from a module in a particular runtime
 ///
 /// makes it easier to know where a specific module
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum RuntimeModuleId {
     Wasm(u32),
 }

@@ -73,7 +73,7 @@ impl Base16Color {
             }
         };
 
-        let get_key = move |key: &str| -> anyhow::Result<Color> {
+        let get_key = |key: &str| -> anyhow::Result<Color> {
             let hex_str = match colors.get(key) {
                 Some(v) => v,
                 None => return Err(anyhow::format_err!("could not get color: {}", key)),
@@ -88,10 +88,10 @@ impl Base16Color {
 
             let hex_color = match u32::from_str_radix(hex_str, 16) {
                 Ok(v) => v,
-                Err(e) => {
+                Err(err) => {
                     return Err(anyhow::format_err!(
                         "couldn't convert hex string to number: {}",
-                        e
+                        err
                     ));
                 }
             };
