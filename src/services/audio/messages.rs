@@ -90,7 +90,21 @@ pub enum Request {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// note: maybe move the following somewhere else?
+// event type
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum AudioEventType {
+    SinksChanged,
+    DefaultSinkChanged,
+    SourcesChanged,
+    DefaultSourceChanged,
+    CardsChanged,
+    SinkProfileChanged,
+    SourceProfileChanged,
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// types used for events
 
 #[derive(Debug, Clone)]
 pub struct Sink {

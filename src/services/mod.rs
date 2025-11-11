@@ -7,23 +7,35 @@
 pub mod audio;
 //pub mod interval;
 
+use crate::runtime::RuntimeModuleId;
+
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
+use std::hash::Hash;
 
 use iced::Subscription;
 use iced::futures::channel::mpsc;
 
 /// a service that provides data to modules
 pub trait Service: Debug + Clone + Sized {
-    /// type is emitted from the service when data changes
-    type Event: Debug + Clone;
-    /// type that is used to perform requests on the service
-    type Request: Debug + Clone;
     /// state for the service
     type State: ServiceState<Self>;
     /// optional extra data for the service
     type RuntimeData: Debug;
-    // note: add smth here please omg
-    type RegisterData: Debug + Clone;
+
+    /// type is emitted from the service when data changes
+    type Event: Debug + Clone;
+    /// type that is used to perform requests on the service
+    type Request: Debug + Clone;
+    /// representation of the raw data from a module used to subscribe/listen
+    /// to events from the service
+    // note: probably not needed, will look into this
+    // - aurora :3
+    type SubscriptionData: Debug + Clone;
+    /// holds the same enums as `Self::Event`, just without the contained data
+    /// this is used for the service's `ModuleIds` so we know which modules to
+    /// send an `Self::Event` to
+    type EventType: Debug + Clone + Hash + Eq + PartialEq;
 
     /// allows the iced to subscribe to this service
     ///
@@ -40,6 +52,10 @@ pub trait Service: Debug + Clone + Sized {
     ///     Subscription::run_with_id(
     ///         id,
     ///         channel(64, async |mut chan| {
+    ///             // services need to be aware of modules even after a service restart so we put
+    ///             // it outside the loop to make it persistent
+    ///             let mut module_ids = ModuleIds::new();
+    ///
     ///             loop {
     ///                 // if the state is initialized outside of the loop, service state is
     ///                 // persistent across service restarts
@@ -60,7 +76,7 @@ pub trait Service: Debug + Clone + Sized {
     ///                 }
     ///
     ///                 // start the service
-    ///                 let err = Self::run(&mut state, &mut chan, &mut ()).await;
+    ///                 let err = Self::run(&mut state, &mut chan, rx, &mut ()).await;
     ///
     ///                 // handle error or just log it
     ///             }
@@ -78,9 +94,10 @@ pub trait Service: Debug + Clone + Sized {
     // it
     async fn run(
         state: &mut Self::State,
+        module_ids: &mut ModuleIds<Self>,
+        runtime_data: &mut Self::RuntimeData,
         chan: &mut mpsc::Sender<ServiceEvent<Self>>,
         request_rx: flume::Receiver<ServiceRequest<Self>>,
-        runtime_data: &mut Self::RuntimeData,
     ) -> anyhow::Error;
 }
 
@@ -131,4 +148,51 @@ pub enum ServiceEvent<S: Service> {
 pub enum ServiceRequest<S: Service> {
     /// a request to the service
     Request { request: S::Request },
+}
+
+/// data structure for storing the relationship between module ids and
+/// the events they registered for
+pub struct ModuleIds<S: Service> {
+    /// used for when an event has occured and we need to emit that event
+    /// to all registered modules
+    events_to_ids: HashMap<S::EventType, HashSet<RuntimeModuleId>>,
+    /// used for when we need to remove a module
+    ids_to_events: HashMap<RuntimeModuleId, HashSet<S::EventType>>,
+}
+
+impl<S: Service> ModuleIds<S> {
+    pub fn new() -> Self {
+        ModuleIds {
+            events_to_ids: HashMap::new(),
+            ids_to_events: HashMap::new(),
+        }
+    }
+
+    /// registers a module with the service
+    pub fn register_module(&mut self, id: RuntimeModuleId, events: Vec<S::EventType>) {
+        for event in &events {
+            if let Some(ids) = &mut self.events_to_ids.get_mut(event) {
+                ids.insert(id.clone());
+            } else {
+                let mut ids = HashSet::new();
+                ids.insert(id.clone());
+                self.events_to_ids.insert(event.clone(), ids);
+            }
+        }
+        self.ids_to_events.insert(id, HashSet::from_iter(events));
+    }
+
+    /// unregisters a module from the service
+    pub fn unregister_module(&mut self, id: RuntimeModuleId) {
+        let events = match self.ids_to_events.remove(&id) {
+            Some(events) => events,
+            None => return,
+        };
+
+        for event in &events {
+            if let Some(ids) = self.events_to_ids.get_mut(event) {
+                ids.remove(&id);
+            }
+        }
+    }
 }

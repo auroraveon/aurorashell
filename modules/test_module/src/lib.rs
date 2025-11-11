@@ -65,8 +65,6 @@ impl Module {
         let id = Id::unique(IdType::LayerSurface);
         let id_2 = Id::unique(IdType::LayerSurface);
 
-        let awrawrawr = Interval::from_millis(3000);
-
         (
             Module {
                 test_surface_id: id,
@@ -108,8 +106,6 @@ impl Module {
                 registers: registers![
                     Interval::from_millis(1000),
                     Interval::from_millis(2000),
-                    PulseAudio::SINKS | PulseAudio::SOURCES,
-                    Interval: awrawrawr,
                 ],
             },
         )

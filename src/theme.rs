@@ -60,7 +60,7 @@ impl Base16Color {
         {
             Ok(v) => v,
             Err(e) => {
-                log::error!("could not get config");
+                log::error!("could not get colors.toml");
                 return Err(e.into());
             }
         };
@@ -68,12 +68,12 @@ impl Base16Color {
         let colors = match colors.try_deserialize::<HashMap<String, String>>() {
             Ok(v) => v,
             Err(e) => {
-                log::error!("could not parse config");
+                log::error!("could not parse colors.toml");
                 return Err(e.into());
             }
         };
 
-        let get_key = move |key: &str| -> anyhow::Result<Color> {
+        let get_key = |key: &str| -> anyhow::Result<Color> {
             let hex_str = match colors.get(key) {
                 Some(v) => v,
                 None => return Err(anyhow::format_err!("could not get color: {}", key)),
@@ -88,10 +88,10 @@ impl Base16Color {
 
             let hex_color = match u32::from_str_radix(hex_str, 16) {
                 Ok(v) => v,
-                Err(e) => {
+                Err(err) => {
                     return Err(anyhow::format_err!(
                         "couldn't convert hex string to number: {}",
-                        e
+                        err
                     ));
                 }
             };
