@@ -96,8 +96,8 @@ impl App {
                     }
                     ServiceEvent::Update { event } => {
                         if let Some(audio) = &mut self.service.audio {
-                            if let Some(wasm) = &mut self.runtime.wasm {
-                                if let Err(err) = WasmRuntime::request(
+                            if let Some(wasm) = &mut self.runtime.wasm
+                                && let Err(err) = WasmRuntime::request(
                                     wasm,
                                     RuntimeRequest::ServiceData {
                                         data: Box::new(event.clone()),
@@ -108,7 +108,6 @@ impl App {
                                          service: {err}"
                                     );
                                 }
-                            }
 
                             log::trace!("[app] audio update: {event:?}");
                         } else {
@@ -200,6 +199,7 @@ impl App {
 
         // render no ui if all checks fail
         return row![].into();
+
     }
 
     pub fn subscription(&self) -> Subscription<AppMessage> {

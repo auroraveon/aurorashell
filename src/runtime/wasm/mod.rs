@@ -196,7 +196,7 @@ impl WasmRuntime {
                                 // this really shouldn't get ran as the surface ids are
                                 // from what the module used and are checked to see
                                 // if they were leased to the module
-                                log::warn!(
+                                log::error!(
                                     "[wasm] [module:{}] surface_id:{} somehow was not leased",
                                     module.module_name,
                                     surface_id

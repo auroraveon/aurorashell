@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::num::NonZeroU32;
 
 use anyhow::anyhow;
 use iced::window::Id;
@@ -8,10 +9,10 @@ use iced::window::Id;
 pub struct WasmId {
     /// always incremented up by 1, starting from 1
     ///
-    /// 0 means none / out of ids (when u8::MAX is reached)
+    /// 0 means none / out of ids (when u32::MAX is reached)
     ///
     /// we use a u32 because thats what gets passed to the module anyway
-    current_id: u32,
+    current_id: NonZeroU32,
     /// tracks currently leased ids
     ///
     /// each leased id for the current module gets mapped to a
@@ -29,25 +30,21 @@ pub struct WasmId {
 impl WasmId {
     /// gets a unique id
     ///
-    /// 0 means none or out of ids (when u8::MAX is reached)
+    /// 0 means none or out of ids (when u32::MAX is reached)
     ///
     /// a u32 is used because thats what the wasm module expects
     pub fn unique(&mut self) -> u32 {
-        // makes sure it can never return 0 but to ensure that it starts
-        // at 1 the default value must return 0
-        if self.current_id == 0 {
-            self.current_id += 1;
-        } else if self.current_id == u8::MAX as u32 {
+        if self.current_id.get() == u32::MAX {
             return 0;
         }
 
-        let id = self.current_id;
+        let id = self.current_id.get();
         let iced_id = Id::unique();
 
         self.leased_ids.insert(id, iced_id);
         self.iced_id_lut.insert(iced_id, id);
 
-        self.current_id += 1;
+        self.current_id = self.current_id.checked_add(1).unwrap();
 
         id
     }
@@ -87,7 +84,7 @@ impl WasmId {
 impl Default for WasmId {
     fn default() -> Self {
         WasmId {
-            current_id: 1,
+            current_id: NonZeroU32::new(1).unwrap(),
             leased_ids: HashMap::new(),
             iced_id_lut: HashMap::new(),
         }
