@@ -198,7 +198,7 @@ impl LayerSurfaceRaw {
             size_limits: limits,
             exclusive_zone: self.exclusive_zone,
             keyboard_interactivity,
-            pointer_interactivity,
+            ..Default::default()
         })
     }
 }
