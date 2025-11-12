@@ -181,6 +181,7 @@ impl LayerSurfaceRaw {
             _ => return None,
         };
 
+        // fix: needs to be redone since SctkLayerSurfaceSettings updated grr
         let pointer_interactivity = match self.pointer_interactivity {
             0 => false,
             1 => true,
