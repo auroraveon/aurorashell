@@ -1,13 +1,14 @@
-mod messages;
+mod data;
 mod se;
 mod state;
-mod wasm;
 
-use messages::{Event, Request, get_cards, get_default_devices, get_sinks, get_sources};
+pub use data::AudioSubscriptionData;
+
+use data::{
+    AudioEventType, Event, Request, get_cards, get_default_devices, get_sinks, get_sources,
+};
 use state::AudioRequestThreadState;
 
-use crate::runtime::module::AudioRegisterData;
-use crate::services::audio::messages::AudioEventType;
 use crate::services::{ModuleIds, Service, ServiceEvent, ServiceRequest, ServiceState};
 
 use std::any::TypeId;
@@ -57,7 +58,7 @@ impl Service for AudioService {
     type Request = Request;
     type RuntimeData = (AudioRequestThreadState,);
     type State = AudioState;
-    type SubscriptionData = AudioRegisterData;
+    type SubscriptionData = AudioSubscriptionData;
 
     fn subscribe() -> iced::Subscription<ServiceEvent<Self>> {
         let id = TypeId::of::<Self>();
@@ -114,34 +115,90 @@ impl Service for AudioService {
         // used for communicating with the pulseaudio mainloop
         // as i haven't found a way to use the async channels that are already
         // provided by the subscription in the mainloop part
-        let (event_tx, event_rx) = flume::bounded::<Event>(CHANNEL_CAPACITY);
+        let (internal_event_tx, internal_event_rx) = flume::bounded::<Event>(CHANNEL_CAPACITY);
+        let (internal_request_tx, internal_request_rx) =
+            flume::bounded::<ServiceRequest<Self>>(CHANNEL_CAPACITY);
 
         let (request_state,) = runtime_data;
 
-        Self::mainloop(event_tx, request_rx, request_state.clone());
+        Self::mainloop(
+            internal_event_tx,
+            internal_request_rx,
+            request_state.clone(),
+        );
 
         loop {
-            match event_rx.recv_async().await {
-                Ok(event) => {
-                    let events = state.update(event.clone());
-                    log::debug!("{:?}", events); // note: prob remove this, not needed
+            tokio::select! {
+                event = internal_event_rx.recv_async() => {
+                    match event {
+                        Ok(event) => {
+                            let events = state.update(event.clone());
+                            log::debug!("{:?}", events); // note: prob remove this, not needed
 
-                    for event in events {
-                        match chan.send(ServiceEvent::Update { event }).await {
-                            Ok(_) => {}
-                            Err(err) => {
-                                log::error!(
-                                    "[service:audio] error sending service event update: {err}"
-                                );
-                                continue;
+                            for event in events {
+                                if let Err(err) = chan.send(ServiceEvent::Update { event }).await {
+                                    log::error!(
+                                        "[service:audio] error sending service event update: {err}"
+                                    );
+                                    continue;
+                                }
                             }
+                        }
+                        Err(err) => {
+                            return anyhow!("[service:audio] error receiving message from mainloop: {err}");
                         }
                     }
                 }
-                Err(err) => {
-                    return anyhow!("[service:audio] error receiving message from mainloop: {err}");
+                request = request_rx.recv_async() => {
+                    match request {
+                        Ok(request) => {
+                            match request {
+                                ServiceRequest::Request { request } => {
+                                    // pulseaudio mainloop processes this instead
+                                    if let Err(err) = internal_request_tx.send(ServiceRequest::Request { request: request.clone() }) {
+                                        log::error!("[service:audio] error relaying service request: {err}");
+                                        continue;
+                                    };
+                                }
+                                ServiceRequest::SubscribeModule { id, data } => {
+                                    let mut events = vec![];
+
+                                    if data.is_set(AudioSubscriptionData::SINKS_CHANGED) {
+                                        events.push(AudioEventType::SinksChanged);
+                                    }
+                                    if data.is_set(AudioSubscriptionData::DEFAULT_SINK_CHANGED) {
+                                        events.push(AudioEventType::DefaultSinkChanged);
+                                    }
+                                    if data.is_set(AudioSubscriptionData::SOURCES_CHANGED) {
+                                        events.push(AudioEventType::SourcesChanged);
+                                    }
+                                    if data.is_set(AudioSubscriptionData::DEFAULT_SOURCE_CHANGED) {
+                                        events.push(AudioEventType::DefaultSourceChanged);
+                                    }
+                                    if data.is_set(AudioSubscriptionData::CARDS_CHANGED) {
+                                        events.push(AudioEventType::CardsChanged);
+                                    }
+                                    if data.is_set(AudioSubscriptionData::SINK_PROFILE_CHANGED) {
+                                        events.push(AudioEventType::SinkProfileChanged);
+                                    }
+                                    if data.is_set(AudioSubscriptionData::SOURCE_PROFILE_CHANGED) {
+                                        events.push(AudioEventType::SourceProfileChanged);
+                                    }
+
+                                    module_ids.register_module(id, events);
+
+                                    // remove this bc its silly and not needed
+                                    // - aurora :3
+                                    log::debug!("[service:audio] module ids = {:?}", module_ids);
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            return anyhow!("[service:audio] error receiving request: {err}");
+                        }
+                    }
                 }
-            }
+            };
         }
     }
 }
@@ -193,7 +250,7 @@ impl AudioService {
         return Ok((mainloop, context));
     }
 
-    /// spawns a thread for the synchronous pulseaudio mainloop
+    /// spawns two threads for the synchronous pulseaudio mainloop
     ///
     /// this code can't be part of `Self::run` as the pulseaudio mainloop
     /// doesn't like async
@@ -316,10 +373,12 @@ impl AudioService {
                     Ok(res) => res,
                     Err(err) => {
                         log::warn!(
-                            "[audio] [pulseaudio thread 2] could not receive request for \
+                            "[service:audio] [pulseaudio thread 2] could not receive request for \
                              mainloop, error: {err}"
                         );
-                        log::warn!("[audio] [pulseaudio thread 2] retrying in 5 seconds...");
+                        log::warn!(
+                            "[service:audio] [pulseaudio thread 2] retrying in 5 seconds..."
+                        );
                         thread::sleep(Duration::from_secs(5));
                         continue;
                     }
@@ -365,6 +424,7 @@ impl AudioService {
                             );
                         }
                     },
+                    _ => {}
                 };
 
                 let result = mainloop.iterate(true);

@@ -1,8 +1,7 @@
-use crate::runtime::module::Register;
 use crate::runtime::wasm::{self, WasmCallbackData, WasmRuntime, WasmState, WasmUiNode};
 use crate::runtime::{RuntimeEvent, RuntimeModuleId, RuntimeRequest, RuntimeService, RuntimeState};
 use crate::services::audio::AudioService;
-use crate::services::{Service, ServiceEvent, ServiceRequest};
+use crate::services::{Service, ServiceEvent, ServiceRequest, SubscriptionData};
 use crate::theme::Base16Color;
 
 use iced::daemon::Appearance;
@@ -95,19 +94,20 @@ impl App {
                         log::debug!("[app] audio service initalized");
                     }
                     ServiceEvent::Update { event } => {
-                        if let Some(audio) = &mut self.service.audio {
+                        if let Some(audio) = &self.service.audio {
                             if let Some(wasm) = &mut self.runtime.wasm
                                 && let Err(err) = WasmRuntime::request(
                                     wasm,
                                     RuntimeRequest::ServiceData {
                                         data: Box::new(event.clone()),
                                     },
-                                ) {
-                                    log::error!(
-                                        "[app] could not send ServiceData request to audio \
-                                         service: {err}"
-                                    );
-                                }
+                                )
+                            {
+                                log::error!(
+                                    "[app] could not send ServiceData request to audio service: \
+                                     {err}"
+                                );
+                            }
 
                             log::trace!("[app] audio update: {event:?}");
                         } else {
@@ -147,11 +147,25 @@ impl App {
                             } = event
                             {
                                 match register {
-                                    Register::Interval {
+                                    SubscriptionData::Interval {
                                         milliseconds,
                                         offset,
                                     } => {}
-                                    Register::PulseAudio { pulseaudio } => {}
+                                    SubscriptionData::PulseAudio { data } => {
+                                        if let Some(audio) = &self.service.audio {
+                                            if let Err(err) =
+                                                audio.send(ServiceRequest::SubscribeModule {
+                                                    id: RuntimeModuleId::Wasm(module_id),
+                                                    data: data,
+                                                })
+                                            {
+                                                log::error!(
+                                                    "[app] failed to send SubscriptionData to \
+                                                     audio service: {err}"
+                                                );
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         } else {
@@ -199,7 +213,6 @@ impl App {
 
         // render no ui if all checks fail
         return row![].into();
-
     }
 
     pub fn subscription(&self) -> Subscription<AppMessage> {

@@ -8,6 +8,7 @@ pub mod audio;
 //pub mod interval;
 
 use crate::runtime::RuntimeModuleId;
+use crate::services::audio::AudioSubscriptionData;
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -148,10 +149,18 @@ pub enum ServiceEvent<S: Service> {
 pub enum ServiceRequest<S: Service> {
     /// a request to the service
     Request { request: S::Request },
+    /// a request to register a module to the service
+    SubscribeModule {
+        /// the id of the module in a runtime
+        id: RuntimeModuleId,
+        /// see `Service::SubscriptionData`
+        data: S::SubscriptionData,
+    },
 }
 
 /// data structure for storing the relationship between module ids and
 /// the events they registered for
+#[derive(Debug)]
 pub struct ModuleIds<S: Service> {
     /// used for when an event has occured and we need to emit that event
     /// to all registered modules
@@ -195,4 +204,10 @@ impl<S: Service> ModuleIds<S> {
             }
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum SubscriptionData {
+    Interval { milliseconds: u64, offset: u32 },
+    PulseAudio { data: AudioSubscriptionData },
 }

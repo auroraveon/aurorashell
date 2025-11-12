@@ -17,8 +17,9 @@ use wasmtime_wasi::WasiCtxBuilder;
 use super::de::Deserialize;
 use super::id::WasmId;
 use super::{Event, WasiContext, WasmHost, WasmModule, WasmRuntime};
+
 use crate::runtime::RuntimeEvent;
-use crate::runtime::module::Register;
+use crate::services::SubscriptionData;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -229,7 +230,7 @@ pub async fn load_modules(
     // if loading the module fails, say that the module with the file name,
     // was skipped :3
 
-    let a = Ok(stream
+    let modules = Ok(stream
         .enumerate()
         .filter_map(|(id, path)| {
             let host = Arc::clone(&host);
@@ -487,17 +488,18 @@ pub async fn load_modules(
                     registers_bytes
                 };
 
-                let registers: Vec<Register> = match Deserialize::deserialize(registers_bytes) {
-                    Ok(res) => res,
-                    Err(err) => {
-                        log::error!(
-                            "[wasm] [module:{}] could not deserialize registers bytes: {}",
-                            file_name,
-                            err
-                        );
-                        return None;
-                    }
-                };
+                let registers: Vec<SubscriptionData> =
+                    match Deserialize::deserialize(registers_bytes) {
+                        Ok(res) => res,
+                        Err(err) => {
+                            log::error!(
+                                "[wasm] [module:{}] could not deserialize registers bytes: {}",
+                                file_name,
+                                err
+                            );
+                            return None;
+                        }
+                    };
 
                 let setup_cleanup_func =
                     match instance.get_typed_func::<(), ()>(&mut store, "setup_cleanup") {
@@ -538,7 +540,7 @@ pub async fn load_modules(
         .collect::<Vec<WasmModule>>()
         .await);
 
-    return a;
+    return modules;
 }
 
 /// get file paths for modules in $HOME/.local/share/aurorashell/modules

@@ -1,4 +1,4 @@
-use super::messages::{Card, Request, Sink, Source};
+use super::data::{Card, Request, Sink, Source};
 use super::{AudioService, Event, PULSE_MAX_VOLUME, UPDATE_INTERVAL};
 
 use crate::services::{ServiceRequest, ServiceState};

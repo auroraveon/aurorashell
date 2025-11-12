@@ -8,11 +8,12 @@ pub trait Deserialize: Sized {
     fn deserialize(data: &[u8]) -> anyhow::Result<Self>;
 }
 
+use crate::services::SubscriptionData;
+use crate::services::audio::AudioSubscriptionData;
+
 use anyhow::anyhow;
 
-use crate::runtime::module::{AudioRegisterData, Register};
-
-impl Deserialize for Vec<Register> {
+impl Deserialize for Vec<SubscriptionData> {
     fn deserialize(data: &[u8]) -> anyhow::Result<Self> {
         // must have at least 0x20 bytes for the header
         if data.len() < 0x10 {
@@ -48,10 +49,12 @@ impl Deserialize for Vec<Register> {
             ));
         }
 
-        let registers: Vec<Register> = data[0x10..registers_table_end]
+        let registers: Vec<SubscriptionData> = data[0x10..registers_table_end]
             .chunks_exact(0x10)
-            .map(|entry_bytes| Register::from_entry_bytes(data, entry_bytes, registers_table_end))
-            .collect::<anyhow::Result<Vec<Register>>>()?;
+            .map(|entry_bytes| {
+                SubscriptionData::from_entry_bytes(data, entry_bytes, registers_table_end)
+            })
+            .collect::<anyhow::Result<Vec<SubscriptionData>>>()?;
 
         log::debug!("{:?}", registers);
 
@@ -80,12 +83,12 @@ struct RegisterEntryData {
     extra_data_offset: u32,
 }
 
-impl Register {
+impl SubscriptionData {
     fn from_entry_bytes(
         data: &[u8],
         entry_bytes: &[u8],
         extra_data_start: usize,
-    ) -> anyhow::Result<Register> {
+    ) -> anyhow::Result<SubscriptionData> {
         let entry_bytes: [u8; 0x10] = match entry_bytes.try_into() {
             Ok(bytes) => bytes,
             Err(err) => {
@@ -97,11 +100,11 @@ impl Register {
             }
         };
 
-        let entry = Register::get_entry_data(entry_bytes)?;
+        let entry = SubscriptionData::get_entry_data(entry_bytes)?;
 
         let res = match entry.id {
-            1 => Register::PulseAudio {
-                pulseaudio: AudioRegisterData(entry.registers as u8),
+            1 => SubscriptionData::PulseAudio {
+                data: AudioSubscriptionData(entry.registers as u8),
             },
             3 => {
                 let offset = entry.extra_data_offset as usize + extra_data_start;
@@ -142,7 +145,7 @@ impl Register {
                     }
                 };
 
-                Register::Interval {
+                SubscriptionData::Interval {
                     milliseconds,
                     offset,
                 }

@@ -1,7 +1,7 @@
 use iced::runtime::platform_specific::wayland::layer_surface::SctkLayerSurfaceSettings;
 
-use crate::runtime::module::Register;
 use crate::runtime::wasm::{WasmCallbackData, WasmUiNode};
+use crate::services::SubscriptionData;
 
 /// messages that the wasm thread sends to the iced thread
 #[derive(Debug, Clone)]
@@ -22,7 +22,10 @@ pub enum Event {
     DestroyLayerSurface(iced::window::Id),
     /// registers a module to a service, linking the items that the module
     /// wants to be aware of from the service
-    RegisterModuleToService { module_id: u32, register: Register },
+    RegisterModuleToService {
+        module_id: u32,
+        register: SubscriptionData,
+    },
 }
 
 /// messages that the wasm thread receives from the iced thread

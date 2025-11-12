@@ -27,7 +27,7 @@ struct Args {
 }
 
 fn setup_logger(verbosity: u8, log_level: LevelFilter) -> anyhow::Result<()> {
-    let mut logger = fern::Dispatch::new().format(|out, message, record| {
+    let mut logger = fern::Dispatch::new().format(move |out, message, record| {
         let date = humantime::format_rfc3339_millis(SystemTime::now());
 
         let colors = ColoredLevelConfig::new()
@@ -37,16 +37,31 @@ fn setup_logger(verbosity: u8, log_level: LevelFilter) -> anyhow::Result<()> {
             .trace(Color::Magenta);
 
         if record.target().starts_with("aurorashell") {
-            out.finish(format_args!(
-                "[{} {}] {}",
-                date,
-                format_args!(
-                    "\x1B[{}m{}\x1B[0m",
-                    colors.get_color(&record.level()).to_fg_str(),
-                    record.level().as_str().to_lowercase()
-                ),
-                message,
-            ))
+            if verbosity == 0 {
+                out.finish(format_args!(
+                    "[{} {}] {}",
+                    date,
+                    format_args!(
+                        "\x1B[{}m{}\x1B[0m",
+                        colors.get_color(&record.level()).to_fg_str(),
+                        record.level().as_str().to_lowercase()
+                    ),
+                    message,
+                ))
+            } else {
+                out.finish(format_args!(
+                    "[{} {}] ({}:{}L) {}",
+                    date,
+                    format_args!(
+                        "\x1B[{}m{}\x1B[0m",
+                        colors.get_color(&record.level()).to_fg_str(),
+                        record.level().as_str().to_lowercase()
+                    ),
+                    record.file().unwrap(),
+                    record.line().unwrap(),
+                    message,
+                ))
+            }
         } else {
             out.finish(format_args!(
                 "[{} {}] [{}] {}",
@@ -59,7 +74,7 @@ fn setup_logger(verbosity: u8, log_level: LevelFilter) -> anyhow::Result<()> {
                 record.target(),
                 message,
             ))
-        }
+        };
     });
 
     // log level sets the log level for aurorashell's code while verbosity
@@ -68,27 +83,34 @@ fn setup_logger(verbosity: u8, log_level: LevelFilter) -> anyhow::Result<()> {
 
     logger = match verbosity {
         0 => {
+            if LevelFilter::Error as usize > log_level as usize {
+                logger.level(log_level)
+            } else {
+                logger.level(LevelFilter::Error)
+            }
+        }
+        1 | 2 => {
             if LevelFilter::Warn as usize > log_level as usize {
                 logger.level(log_level)
             } else {
                 logger.level(LevelFilter::Warn)
             }
         }
-        1 => {
+        3 => {
             if LevelFilter::Info as usize > log_level as usize {
                 logger.level(log_level)
             } else {
                 logger.level(LevelFilter::Info)
             }
         }
-        2 => {
+        4 => {
             if LevelFilter::Debug as usize > log_level as usize {
                 logger.level(log_level)
             } else {
                 logger.level(LevelFilter::Debug)
             }
         }
-        _3_or_more => {
+        _5_or_more => {
             if LevelFilter::Trace as usize > log_level as usize {
                 logger.level(log_level)
             } else {

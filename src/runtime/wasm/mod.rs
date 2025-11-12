@@ -15,8 +15,9 @@ use fs::load_modules;
 use id::WasmId;
 use ui::get_element_tree;
 
-use super::module::Register;
 use super::{RuntimeEvent, RuntimeRequest, RuntimeService};
+
+use crate::services::SubscriptionData;
 
 use std::any::TypeId;
 use std::cell::RefCell;
@@ -101,7 +102,7 @@ impl WasmRuntime {
 
         host.modules = load_modules(&mut host, chan).await?;
 
-        let mut modules_registers_map: Vec<(u32, Register)> = vec![];
+        let mut modules_registers_map: Vec<(u32, SubscriptionData)> = vec![];
         // assign registers from each module to a service
         for module in &host.modules {
             for register in &module.registers {
@@ -351,7 +352,7 @@ struct WasmModule {
     /// file path in $HOME/.local/share/aurorashell/modules
     file_path: PathBuf,
     /// the registers the module has requested
-    registers: Vec<Register>,
+    registers: Vec<SubscriptionData>,
     #[derivative(Debug = "ignore")]
     /// each module gets it own store for isolation
     /// and to id it when it makes a call to us
